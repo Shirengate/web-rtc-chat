@@ -34,7 +34,7 @@ app.get("/api/rooms", (req, res) => {
     roomId,
     userCount: room.users.size,
     createdAt: room.createdAt,
-    users: Array.from(room.users).map((socketId) => users.get(socketId)),
+    users: getUsersInRoom(roomId),
   }));
   res.json(roomsInfo);
 });
@@ -51,7 +51,7 @@ app.get("/api/rooms/:roomId", (req, res) => {
     roomId,
     userCount: room.users.size,
     createdAt: room.createdAt,
-    users: Array.from(room.users).map((socketId) => users.get(socketId)),
+    users: getUsersInRoom(roomId),
   };
 
   res.json(roomInfo);
@@ -102,13 +102,11 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Проверяем, существует ли комната
     if (rooms.has(roomId)) {
       socket.emit("error", { message: "Room already exists" });
       return;
     }
 
-    // Создаем комнату
     const room = {
       users: new Set(),
       createdAt: new Date(),
@@ -122,7 +120,6 @@ io.on("connection", (socket) => {
     rooms.set(roomId, room);
     log(`✅ Комната создана через сокет: ${roomId} пользователем ${userId}`);
 
-    // Присоединяем создателя к комнате
     joinRoom(socket, roomId, userId, userData);
   });
 
@@ -135,14 +132,12 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Проверяем существование комнаты
     const room = rooms.get(roomId);
     if (!room) {
       socket.emit("error", { message: "Room not found" });
       return;
     }
 
-    // Проверяем лимит пользователей
     if (room.users.size >= room.settings.maxUsers) {
       socket.emit("error", { message: "Room is full" });
       return;
@@ -278,11 +273,9 @@ io.on("connection", (socket) => {
       leaveRoom(socket, socket.roomId);
     }
 
-    // Удаляем пользователя из хранилища
     users.delete(socket.id);
   });
 
-  // Обработка ошибок
   socket.on("error", (error) => {
     log(`Socket error от ${socket.userId}: ${error.message}`);
   });
@@ -301,9 +294,12 @@ function joinRoom(socket, roomId, userId, userData) {
   // Проверяем, не находится ли пользователь уже в этой комнате
   if (socket.roomId === roomId && socket.userId === userId) {
     log(`Пользователь ${userId} уже в комнате ${roomId}`);
+    const otherUsers = getUsersInRoom(roomId).filter(
+      (user) => user.id !== userId
+    );
     socket.emit("room-joined", {
       roomId,
-      usersInRoom: getUsersInRoom(roomId).filter((user) => user.id !== userId),
+      usersInRoom: otherUsers,
       yourId: userId,
       roomSettings: room.settings,
     });
@@ -315,57 +311,95 @@ function joinRoom(socket, roomId, userId, userData) {
     leaveRoom(socket, socket.roomId);
   }
 
-  // Добавляем пользователя в комнату
-  room.users.add(socket.id);
-
   // Сохраняем информацию о пользователе
-  users.set(socket.id, {
+  const userInfo = {
     id: userId,
     socketId: socket.id,
     roomId: roomId,
     userData: userData || {},
     joinedAt: new Date(),
-  });
+  };
+  users.set(socket.id, userInfo);
+
+  // Добавляем пользователя в комнату
+  room.users.add(socket.id);
 
   socket.join(roomId);
   socket.roomId = roomId;
   socket.userId = userId;
 
-  // Получаем список пользователей в комнате
-  const usersInRoom = getUsersInRoom(roomId);
+  // Получаем ВСЕХ пользователей в комнате (включая текущего)
+  const allUsersInRoom = getUsersInRoom(roomId);
 
-  // Уведомляем других участников о новом пользователе
-  socket.to(roomId).emit("user-joined", {
-    userId,
-    userData: userData || {},
-    usersInRoom: usersInRoom.filter((user) => user.id !== userId),
-  });
+  // Для нового пользователя отправляем всех остальных пользователей
+  const otherUsersForNewUser = allUsersInRoom.filter(
+    (user) => user.id !== userId
+  );
 
-  // Отправляем текущее состояние комнаты новому пользователю
+  log(
+    `🔍 [DEBUG] Все пользователи в комнате ${roomId}:`,
+    allUsersInRoom.map((u) => u.id)
+  );
+  log(
+    `🔍 [DEBUG] Для нового пользователя ${userId}:`,
+    otherUsersForNewUser.map((u) => u.id)
+  );
+
+  // ОТПРАВЛЯЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ НОВОМУ ПОЛЬЗОВАТЕЛЮ
   socket.emit("room-joined", {
     roomId,
-    usersInRoom: usersInRoom.filter((user) => user.id !== userId),
+    usersInRoom: otherUsersForNewUser, // все остальные пользователи
     yourId: userId,
     roomSettings: room.settings,
   });
 
+  // УВЕДОМЛЯЕМ ВСЕХ ОСТАЛЬНЫХ ПОЛЬЗОВАТЕЛЕЙ О НОВОМ ПОЛЬЗОВАТЕЛЕ
+  // И ОТПРАВЛЯЕМ ИМ ПОЛНЫЙ СПИСОК ПОЛЬЗОВАТЕЛЕЙ
+  const otherUsersInRoom = Array.from(room.users)
+    .filter((socketId) => socketId !== socket.id)
+    .map((socketId) => users.get(socketId))
+    .filter((user) => user !== undefined);
+
   log(
-    `Пользователь ${userId} успешно присоединился к комнате ${roomId}. Всего пользователей: ${room.users.size}`
+    `🔍 [DEBUG] Уведомляем других пользователей:`,
+    otherUsersInRoom.map((u) => u.id)
+  );
+
+  otherUsersInRoom.forEach((otherUser) => {
+    const otherUserSocket = io.sockets.sockets.get(otherUser.socketId);
+    if (otherUserSocket) {
+      // Обновляем список пользователей для существующих пользователей
+      const usersForExistingUser = allUsersInRoom.filter(
+        (user) => user.id !== otherUser.id
+      );
+
+      otherUserSocket.emit("user-joined", {
+        userId: userId,
+        userData: userData || {},
+        usersInRoom: usersForExistingUser, // полный список для существующих пользователей
+      });
+    }
+  });
+
+  log(
+    `✅ Пользователь ${userId} успешно присоединился к комнате ${roomId}. Всего пользователей: ${room.users.size}`
   );
 }
 
 function leaveRoom(socket, roomId) {
   const room = rooms.get(roomId);
   if (room) {
+    const leavingUserId = socket.userId;
+
     room.users.delete(socket.id);
 
     // Уведомляем других участников об отключении
     socket.to(roomId).emit("user-left", {
-      userId: socket.userId,
+      userId: leavingUserId,
       reason: "left",
     });
 
-    log(`Пользователь ${socket.userId} покинул комнату ${roomId}`);
+    log(`Пользователь ${leavingUserId} покинул комнату ${roomId}`);
 
     // Очищаем данные сокета
     socket.leave(roomId);
@@ -378,14 +412,16 @@ function getUsersInRoom(roomId) {
   const room = rooms.get(roomId);
   if (!room) return [];
 
-  return Array.from(room.users)
+  const roomUsers = Array.from(room.users)
     .map((socketId) => users.get(socketId))
-    .filter((user) => user !== undefined);
+    .filter((user) => user !== undefined && user !== null);
+
+  return roomUsers;
 }
 
 function getUserByUserId(userId) {
   for (let [socketId, user] of users) {
-    if (user.id === userId) {
+    if (user && user.id === userId) {
       return user;
     }
   }
@@ -403,7 +439,6 @@ setInterval(() => {
 
   for (let [roomId, room] of rooms) {
     if (room.users.size === 0) {
-      // Удаляем комнаты, которые пусты более 30 минут
       const timeDiff = now - room.createdAt;
       if (timeDiff > 30 * 60 * 1000) {
         rooms.delete(roomId);
@@ -416,7 +451,7 @@ setInterval(() => {
   if (cleanedCount > 0) {
     log(`🧹 Всего удалено пустых комнат: ${cleanedCount}`);
   }
-}, 5 * 60 * 1000); // 5 минут
+}, 5 * 60 * 1000);
 
 // Запуск сервера
 const PORT = process.env.PORT || 3001;
@@ -425,7 +460,6 @@ server.listen(PORT, () => {
   log(`📊 Статус: http://localhost:${PORT}/api/rooms`);
 });
 
-// Обработка graceful shutdown
 process.on("SIGINT", () => {
   log("🛑 Остановка сервера...");
   server.close(() => {

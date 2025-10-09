@@ -16,7 +16,12 @@
     <div class="room-content">
       <div class="main-square">
         <div class="square-content">
-          <span class="square-text">Основная область</span>
+          <video
+            ref="videoRef"
+            :src="myMedia"
+            :autoplay="true"
+            :playsinline="true"
+          ></video>
         </div>
       </div>
     </div>
@@ -28,10 +33,10 @@
           <div class="user-avatar"></div>
           <span class="username">Вы</span>
         </div>
-        <!-- <div class="user-item" v-for="user in users" :key="user.id">
+        <div class="user-item" v-for="user in users" :key="user.id">
           <div class="user-avatar"></div>
-          <span class="username">{{ user.name }}</span>
-        </div> -->
+          <span class="username">{{ user.userData.name }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -39,14 +44,62 @@
 <script setup>
 import { useRoute } from "vue-router";
 import { socket } from "../socket/socket";
+import { onMounted, watchEffect, ref, onUnmounted, reactive } from "vue";
 const { params } = useRoute();
-import { v4 } from "uuid";
+
+const videoRef = ref(null);
+const users = ref([]);
+const myMedia = ref(null);
+const peerMeida = reactive({});
+const peerConntections = reactive({});
+socket.on("user-left", (data) => {
+  console.log("user-left", data);
+  users.value = users.value.filter((user) => user.id !== data.userId);
+});
 socket.on("room-joined", (data) => {
+  data.usersInRoom.forEach((user) => {
+    handlePeer({
+      id: user.id,
+      createOffer: true,
+    });
+  });
   console.log("Присоединились к комнате:", data);
 });
 
 socket.on("user-joined", (data) => {
+  users.value = data.usersInRoom || [];
   console.log("Новый пользователь:", data);
+  if (data.userId) {
+    handlePeer({
+      id: data.userId,
+      createOffer: true,
+    });
+  }
+});
+
+socket.on("ice-candidate", (data) => {
+  console.log("Получен ICE candidate от:", data);
+});
+
+onMounted(async () => {
+  myMedia.value = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: true,
+  });
+
+  if (videoRef.value) {
+    videoRef.value.srcObject = myMedia.value;
+    videoRef.value.volume = 0;
+  }
+});
+
+// Очистка при размонтировании
+onUnmounted(() => {
+  socket.emit("leave-room");
+});
+
+watchEffect(() => {
+  console.log(users.value);
 });
 </script>
 
@@ -164,7 +217,6 @@ socket.on("user-joined", (data) => {
 .main-square {
   width: 400px;
   height: 400px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 16px;
   display: flex;
   justify-content: center;

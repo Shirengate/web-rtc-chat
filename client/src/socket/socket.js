@@ -1,9 +1,9 @@
 import { io } from "socket.io-client";
 
-export const socket = io("http://localhost:8000", {
+export const socket = io("https://ws-production-1f43.up.railway.app/", {
   transports: ["websocket", "polling", "flashsocket"],
   cors: {
-    origin: "http://localhost:8000",
+    origin: "https://ws-production-1f43.up.railway.app/",
     credentials: true,
   },
   withCredentials: true,

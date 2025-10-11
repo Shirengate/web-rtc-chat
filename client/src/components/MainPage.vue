@@ -9,9 +9,12 @@
       id="my-video"
     ></video>
     <video
+      v-for="media in remoteMediaStreams"
+      :key="media.id"
       class="video"
       autoplay
       playsinline
+      :srcObject="media.mediaStream"
       ref="remote_video_ref"
       id="remote-video"
     ></video>
@@ -19,8 +22,6 @@
     <button :disabled="disabled" @click="callFn" class="join-room__btn">
       Join room
     </button>
-
-    <div class="status">{{ connectionStatus }}</div>
   </div>
 </template>
 
@@ -33,9 +34,9 @@ import randomName from "@scaleway/random-name";
 const my_video_ref = ref(null);
 const remote_video_ref = ref(null);
 const disabled = ref(false);
-const connectionStatus = ref("Не подключено");
 const localMedieStream = ref(null);
 
+const remoteMediaStreams = ref([]);
 // Хранилище для peer connections (для каждого пользователя отдельное)
 const peerConnections = new Map();
 const pendingCandidates = new Map();
@@ -51,10 +52,8 @@ const callFn = async () => {
     name: randomName(),
   });
   disabled.value = true;
-  connectionStatus.value = "Подключение...";
 };
 
-// Создание нового peer connection для конкретного пользователя
 const createPeerConnection = (userId) => {
   console.log(`🔧 Создание PC для пользователя: ${userId}`);
 
@@ -63,7 +62,6 @@ const createPeerConnection = (userId) => {
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:stun1.l.google.com:19302" },
       { urls: "stun:stun2.l.google.com:19302" },
-      // TURN серверы для работы через NAT
       {
         urls: "turn:openrelay.metered.ca:80",
         username: "openrelayproject",
@@ -83,7 +81,6 @@ const createPeerConnection = (userId) => {
     iceCandidatePoolSize: 10,
   });
 
-  // Обработчик ICE кандидатов
   pc.onicecandidate = (e) => {
     if (e.candidate) {
       socket.emit("candidate", {
@@ -99,42 +96,21 @@ const createPeerConnection = (userId) => {
     }
   };
 
-  // Отслеживание состояния ICE
-  pc.oniceconnectionstatechange = () => {
-    console.log(
-      `🔌 ICE connection state для ${userId}:`,
-      pc.iceConnectionState
-    );
-    connectionStatus.value = `ICE: ${pc.iceConnectionState}`;
-
-    if (
-      pc.iceConnectionState === "connected" ||
-      pc.iceConnectionState === "completed"
-    ) {
-      connectionStatus.value = "✅ Подключено";
-    } else if (pc.iceConnectionState === "failed") {
-      connectionStatus.value = "❌ Ошибка подключения";
-      console.error(`ICE connection failed для ${userId}`);
-    } else if (pc.iceConnectionState === "disconnected") {
-      connectionStatus.value = "⚠️ Отключено";
-    }
-  };
-
-  // Отслеживание общего состояния соединения
-  pc.onconnectionstatechange = () => {
-    console.log(`🔗 Connection state для ${userId}:`, pc.connectionState);
-  };
-
-  // Получение удалённого видео потока
   pc.addEventListener("track", (e) => {
-    console.log(`📹 Получен remote track от ${userId}`);
     const mediaStream = e.streams[0];
+    console.log(mediaStream);
     if (remote_video_ref.value) {
       remote_video_ref.value.srcObject = mediaStream;
     }
+    if (remoteMediaStreams.value.find((m) => m.id === userId)) {
+      return;
+    }
+    remoteMediaStreams.value = [
+      ...remoteMediaStreams.value,
+      { id: userId, mediaStream },
+    ];
   });
 
-  // Сохраняем peer connection и инициализируем буфер для кандидатов
   peerConnections.set(userId, pc);
   pendingCandidates.set(userId, []);
 
@@ -148,10 +124,7 @@ socket.on("user_joined", async (user) => {
   const userId = user.user.id;
 
   try {
-    // Создаём новое peer connection для этого пользователя
     const pc = createPeerConnection(userId);
-
-    // Добавляем локальные треки
     localMedieStream.value.getTracks().forEach((track) => {
       pc.addTrack(track, localMedieStream.value);
       console.log(`➕ Добавлен track: ${track.kind}`);
@@ -182,19 +155,15 @@ socket.on("getOffer", async (sdp) => {
   const userId = sdp.sender;
 
   try {
-    // Создаём новое peer connection для этого пользователя
     const pc = createPeerConnection(userId);
 
-    // Добавляем локальные треки
     localMedieStream.value.getTracks().forEach((track) => {
       pc.addTrack(track, localMedieStream.value);
     });
 
-    // Устанавливаем remote description
     await pc.setRemoteDescription(new RTCSessionDescription(sdp.sdp));
     console.log(`✅ setRemoteDescription выполнен для ${userId}`);
 
-    // Применяем все накопленные candidates
     const pending = pendingCandidates.get(userId) || [];
     console.log(
       `📦 Применение ${pending.length} накопленных candidates для ${userId}`
@@ -204,11 +173,9 @@ socket.on("getOffer", async (sdp) => {
     }
     pendingCandidates.set(userId, []);
 
-    // Создаём answer
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
-    // Отправляем answer
     socket.emit("answer", {
       target: userId,
       sdp: answer,
@@ -221,11 +188,8 @@ socket.on("getOffer", async (sdp) => {
 
 socket.on("getAnswer", async (sdp) => {
   if (!sdp.sdp || !sdp.sender) {
-    console.error("❌ Некорректный answer");
     return;
   }
-
-  console.log(`📨 Получен answer от ${sdp.sender}`);
   const userId = sdp.sender;
 
   try {
@@ -235,15 +199,8 @@ socket.on("getAnswer", async (sdp) => {
       return;
     }
 
-    // Устанавливаем remote description
     await pc.setRemoteDescription(new RTCSessionDescription(sdp.sdp));
-    console.log(`✅ setRemoteDescription выполнен для ${userId}`);
-
-    // Применяем все накопленные candidates
     const pending = pendingCandidates.get(userId) || [];
-    console.log(
-      `📦 Применение ${pending.length} накопленных candidates для ${userId}`
-    );
     for (const candidate of pending) {
       await pc.addIceCandidate(new RTCIceCandidate(candidate));
     }
@@ -265,11 +222,9 @@ socket.on("getCandidate", async ({ candidate, sender }) => {
     const pc = peerConnections.get(sender);
 
     if (pc && pc.remoteDescription && pc.remoteDescription.type) {
-      // Remote description уже установлен - добавляем candidate сразу
       await pc.addIceCandidate(new RTCIceCandidate(candidate));
       console.log(`✅ Candidate добавлен для ${sender}`);
     } else {
-      // Remote description ещё не установлен - добавляем в буфер
       const pending = pendingCandidates.get(sender) || [];
       pending.push(candidate);
       pendingCandidates.set(sender, pending);
@@ -286,20 +241,15 @@ socket.on("user_left", (data) => {
   const userId = data?.user?.id;
   if (userId) {
     console.log(`👋 Пользователь покинул комнату: ${userId}`);
-
-    // Закрываем peer connection
     const pc = peerConnections.get(userId);
     if (pc) {
       pc.close();
       peerConnections.delete(userId);
     }
-
-    // Очищаем буфер кандидатов
     pendingCandidates.delete(userId);
   }
 });
 
-/// Lifecycle hooks
 onMounted(async () => {
   try {
     const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -320,12 +270,10 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  // Закрываем все peer connections при размонтировании
   peerConnections.forEach((pc) => pc.close());
   peerConnections.clear();
   pendingCandidates.clear();
 
-  // Останавливаем локальный медиа поток
   if (localMedieStream.value) {
     localMedieStream.value.getTracks().forEach((track) => track.stop());
   }

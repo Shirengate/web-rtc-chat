@@ -9,7 +9,13 @@
       muted
       id="my-video"
     ></video>
-    <video class="video" ref="remote_video_ref" id="remote-video"></video>
+    <video
+      class="video"
+      autoplay
+      playsinline
+      ref="remote_video_ref"
+      id="remote-video"
+    ></video>
 
     <button :disabled="disabled" @click="callFn" class="join-room__btn">
       Join room
@@ -35,7 +41,6 @@ const pc = new RTCPeerConnection({
     { urls: "stun:stun1.l.google.com:5349" },
   ],
 });
-
 const localMedieStream = ref(null);
 const userMediaStream = ref(null);
 

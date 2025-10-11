@@ -1,4 +1,3 @@
-
 <template>
   <div class="wrapper">
     <video
@@ -20,11 +19,13 @@
     <button :disabled="disabled" @click="callFn" class="join-room__btn">
       Join room
     </button>
+
+    <div class="status">{{ connectionStatus }}</div>
   </div>
 </template>
 
-<script setup >
-import { onMounted, reactive, ref } from "vue";
+<script setup>
+import { onMounted, onUnmounted, ref } from "vue";
 import { socket } from "../socket/socket";
 import randomName from "@scaleway/random-name";
 
@@ -32,22 +33,12 @@ import randomName from "@scaleway/random-name";
 const my_video_ref = ref(null);
 const remote_video_ref = ref(null);
 const disabled = ref(false);
-const remoteUser = reactive({});
-const pc = new RTCPeerConnection({
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun.l.google.com:5349" },
-    { urls: "stun:stun1.l.google.com:3478" },
-    { urls: "stun:stun1.l.google.com:5349" },
-    {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-  ],
-});
+const connectionStatus = ref("Не подключено");
 const localMedieStream = ref(null);
-const userMediaStream = ref(null);
+
+// Хранилище для peer connections (для каждого пользователя отдельное)
+const peerConnections = new Map();
+const pendingCandidates = new Map();
 
 /// functions
 const callFn = async () => {
@@ -60,87 +51,284 @@ const callFn = async () => {
     name: randomName(),
   });
   disabled.value = true;
+  connectionStatus.value = "Подключение...";
 };
 
-/// pc handlers
+// Создание нового peer connection для конкретного пользователя
+const createPeerConnection = (userId) => {
+  console.log(`🔧 Создание PC для пользователя: ${userId}`);
 
-pc.onicecandidate = (e) => {
-  const { candidate } = e;
-  if (!candidate || !remoteUser.id) {
-    return null;
-  }
-  socket.emit("candidate", {
-    target: remoteUser.id,
-    candidate,
+  const pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      { urls: "stun:stun2.l.google.com:19302" },
+      // TURN серверы для работы через NAT
+      {
+        urls: "turn:openrelay.metered.ca:80",
+        username: "openrelayproject",
+        credential: "openrelayproject",
+      },
+      {
+        urls: "turn:openrelay.metered.ca:443",
+        username: "openrelayproject",
+        credential: "openrelayproject",
+      },
+      {
+        urls: "turn:openrelay.metered.ca:443?transport=tcp",
+        username: "openrelayproject",
+        credential: "openrelayproject",
+      },
+    ],
+    iceCandidatePoolSize: 10,
   });
-  console.log("new ice candidate", candidate);
+
+  // Обработчик ICE кандидатов
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      socket.emit("candidate", {
+        target: userId,
+        candidate: e.candidate,
+      });
+      console.log(
+        `📤 Отправлен ICE candidate для ${userId}:`,
+        e.candidate.type
+      );
+    } else {
+      console.log(`❄️ ICE gathering завершён для ${userId}`);
+    }
+  };
+
+  // Отслеживание состояния ICE
+  pc.oniceconnectionstatechange = () => {
+    console.log(
+      `🔌 ICE connection state для ${userId}:`,
+      pc.iceConnectionState
+    );
+    connectionStatus.value = `ICE: ${pc.iceConnectionState}`;
+
+    if (
+      pc.iceConnectionState === "connected" ||
+      pc.iceConnectionState === "completed"
+    ) {
+      connectionStatus.value = "✅ Подключено";
+    } else if (pc.iceConnectionState === "failed") {
+      connectionStatus.value = "❌ Ошибка подключения";
+      console.error(`ICE connection failed для ${userId}`);
+    } else if (pc.iceConnectionState === "disconnected") {
+      connectionStatus.value = "⚠️ Отключено";
+    }
+  };
+
+  // Отслеживание общего состояния соединения
+  pc.onconnectionstatechange = () => {
+    console.log(`🔗 Connection state для ${userId}:`, pc.connectionState);
+  };
+
+  // Получение удалённого видео потока
+  pc.addEventListener("track", (e) => {
+    console.log(`📹 Получен remote track от ${userId}`);
+    const mediaStream = e.streams[0];
+    if (remote_video_ref.value) {
+      remote_video_ref.value.srcObject = mediaStream;
+    }
+  });
+
+  // Сохраняем peer connection и инициализируем буфер для кандидатов
+  peerConnections.set(userId, pc);
+  pendingCandidates.set(userId, []);
+
+  return pc;
 };
 
-pc.addEventListener("track", (e) => {
-  const mediaStream = e.streams[0];
-  console.log(mediaStream);
-  remote_video_ref.value.srcObject = mediaStream;
-});
-/// sockets_handlers
+/// Socket handlers
 
 socket.on("user_joined", async (user) => {
-  console.log("✅ New user joined:", user);
-  remoteUser.id = user.user.id;
-  localMedieStream.value.getTracks().forEach((track) => {
-    pc.addTrack(track, localMedieStream.value);
-  });
+  console.log("✅ Новый пользователь присоединился:", user);
+  const userId = user.user.id;
 
-  const offer = await pc.createOffer();
+  try {
+    // Создаём новое peer connection для этого пользователя
+    const pc = createPeerConnection(userId);
 
-  pc.setLocalDescription(offer);
-  socket.emit("offer", {
-    target: user.user.id,
-    sdp: offer,
-  });
-});
-socket.on("getOffer", async (sdp) => {
-  if (!sdp.sdp) {
-    return null;
+    // Добавляем локальные треки
+    localMedieStream.value.getTracks().forEach((track) => {
+      pc.addTrack(track, localMedieStream.value);
+      console.log(`➕ Добавлен track: ${track.kind}`);
+    });
+
+    // Создаём offer
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    // Отправляем offer
+    socket.emit("offer", {
+      target: userId,
+      sdp: offer,
+    });
+    console.log(`📨 Отправлен offer для ${userId}`);
+  } catch (error) {
+    console.error("❌ Ошибка в user_joined:", error);
   }
-  localMedieStream.value.getTracks().forEach((track) => {
-    pc.addTrack(track, localMedieStream.value);
-  });
+});
 
-  await pc.setRemoteDescription(sdp.sdp);
+socket.on("getOffer", async (sdp) => {
+  if (!sdp.sdp || !sdp.sender) {
+    console.error("❌ Некорректный offer");
+    return;
+  }
 
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
+  console.log(`📨 Получен offer от ${sdp.sender}`);
+  const userId = sdp.sender;
 
-  socket.emit("answer", {
-    target: sdp.sender,
-    sdp: answer,
-  });
+  try {
+    // Создаём новое peer connection для этого пользователя
+    const pc = createPeerConnection(userId);
 
-  console.log("📨 get offer:", sdp);
+    // Добавляем локальные треки
+    localMedieStream.value.getTracks().forEach((track) => {
+      pc.addTrack(track, localMedieStream.value);
+    });
+
+    // Устанавливаем remote description
+    await pc.setRemoteDescription(new RTCSessionDescription(sdp.sdp));
+    console.log(`✅ setRemoteDescription выполнен для ${userId}`);
+
+    // Применяем все накопленные candidates
+    const pending = pendingCandidates.get(userId) || [];
+    console.log(
+      `📦 Применение ${pending.length} накопленных candidates для ${userId}`
+    );
+    for (const candidate of pending) {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    }
+    pendingCandidates.set(userId, []);
+
+    // Создаём answer
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    // Отправляем answer
+    socket.emit("answer", {
+      target: userId,
+      sdp: answer,
+    });
+    console.log(`📨 Отправлен answer для ${userId}`);
+  } catch (error) {
+    console.error("❌ Ошибка в getOffer:", error);
+  }
 });
 
 socket.on("getAnswer", async (sdp) => {
-  if (!sdp.sdp) {
-    return null;
+  if (!sdp.sdp || !sdp.sender) {
+    console.error("❌ Некорректный answer");
+    return;
   }
-  await pc.setRemoteDescription(sdp.sdp);
+
+  console.log(`📨 Получен answer от ${sdp.sender}`);
+  const userId = sdp.sender;
+
+  try {
+    const pc = peerConnections.get(userId);
+    if (!pc) {
+      console.error(`❌ Peer connection не найден для ${userId}`);
+      return;
+    }
+
+    // Устанавливаем remote description
+    await pc.setRemoteDescription(new RTCSessionDescription(sdp.sdp));
+    console.log(`✅ setRemoteDescription выполнен для ${userId}`);
+
+    // Применяем все накопленные candidates
+    const pending = pendingCandidates.get(userId) || [];
+    console.log(
+      `📦 Применение ${pending.length} накопленных candidates для ${userId}`
+    );
+    for (const candidate of pending) {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    }
+    pendingCandidates.set(userId, []);
+  } catch (error) {
+    console.error("❌ Ошибка в getAnswer:", error);
+  }
 });
 
-socket.on("getCandidate", async ({ candidate }) => {
-  console.log("thi is candidate", candidate);
-  await pc.addIceCandidate(candidate);
-});
-/// hooks
-onMounted(async () => {
-  const mediaStream = await navigator.mediaDevices.getUserMedia({
-    audio: true,
-    video: true,
-  });
-  if (my_video_ref.value) {
-    my_video_ref.value.srcObject = mediaStream;
-    localMedieStream.value = mediaStream;
+socket.on("getCandidate", async ({ candidate, sender }) => {
+  if (!sender || !candidate) {
+    console.error("❌ Некорректный candidate");
+    return;
   }
-  console.log(mediaStream);
+
+  console.log(`📥 Получен candidate от ${sender}`);
+
+  try {
+    const pc = peerConnections.get(sender);
+
+    if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+      // Remote description уже установлен - добавляем candidate сразу
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log(`✅ Candidate добавлен для ${sender}`);
+    } else {
+      // Remote description ещё не установлен - добавляем в буфер
+      const pending = pendingCandidates.get(sender) || [];
+      pending.push(candidate);
+      pendingCandidates.set(sender, pending);
+      console.log(
+        `⏳ Candidate добавлен в буфер для ${sender}. Всего в буфере: ${pending.length}`
+      );
+    }
+  } catch (error) {
+    console.error(`❌ Ошибка при добавлении candidate для ${sender}:`, error);
+  }
+});
+
+socket.on("user_left", (data) => {
+  const userId = data?.user?.id;
+  if (userId) {
+    console.log(`👋 Пользователь покинул комнату: ${userId}`);
+
+    // Закрываем peer connection
+    const pc = peerConnections.get(userId);
+    if (pc) {
+      pc.close();
+      peerConnections.delete(userId);
+    }
+
+    // Очищаем буфер кандидатов
+    pendingCandidates.delete(userId);
+  }
+});
+
+/// Lifecycle hooks
+onMounted(async () => {
+  try {
+    const mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: true,
+    });
+
+    if (my_video_ref.value) {
+      my_video_ref.value.srcObject = mediaStream;
+      localMedieStream.value = mediaStream;
+    }
+
+    console.log("📹 Локальный медиа поток получен");
+  } catch (error) {
+    console.error("❌ Ошибка получения медиа потока:", error);
+    alert("Не удалось получить доступ к камере/микрофону");
+  }
+});
+
+onUnmounted(() => {
+  // Закрываем все peer connections при размонтировании
+  peerConnections.forEach((pc) => pc.close());
+  peerConnections.clear();
+  pendingCandidates.clear();
+
+  // Останавливаем локальный медиа поток
+  if (localMedieStream.value) {
+    localMedieStream.value.getTracks().forEach((track) => track.stop());
+  }
 });
 </script>
 
@@ -164,6 +352,7 @@ onMounted(async () => {
   background-color: #000;
   object-fit: cover;
 }
+
 .join-room__btn {
   background: none;
   border: none;
@@ -172,7 +361,23 @@ onMounted(async () => {
   min-width: 500px;
   background: lightgray;
   border-radius: 10px;
+  cursor: pointer;
+  padding: 10px;
 }
+
+.join-room__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status {
+  font-size: 18px;
+  font-weight: bold;
+  padding: 10px 20px;
+  background: #f0f0f0;
+  border-radius: 8px;
+}
+
 @media (max-width: 768px) {
   .video {
     height: 300px;
@@ -182,6 +387,11 @@ onMounted(async () => {
   .wrapper {
     gap: 10px;
     padding: 10px;
+  }
+
+  .join-room__btn {
+    min-width: 300px;
+    font-size: 20px;
   }
 }
 </style>

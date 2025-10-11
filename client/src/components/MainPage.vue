@@ -240,11 +240,13 @@ socket.on("getCandidate", async ({ candidate, sender }) => {
 socket.on("user_left", (data) => {
   const userId = data?.user?.id;
   if (userId) {
-    console.log(`👋 Пользователь покинул комнату: ${userId}`);
     const pc = peerConnections.get(userId);
     if (pc) {
       pc.close();
       peerConnections.delete(userId);
+      remoteMediaStreams.value = remoteMediaStreams.value.filter(
+        (m) => m.id !== userId
+      );
     }
     pendingCandidates.delete(userId);
   }
@@ -273,7 +275,7 @@ onUnmounted(() => {
   peerConnections.forEach((pc) => pc.close());
   peerConnections.clear();
   pendingCandidates.clear();
-
+  remoteMediaStreams.value = [];
   if (localMedieStream.value) {
     localMedieStream.value.getTracks().forEach((track) => track.stop());
   }

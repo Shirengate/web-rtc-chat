@@ -1,125 +1,177 @@
+
 <template>
-  <div class="main-container">
-    <div class="content">
-      <h1 class="title">Главная страница</h1>
-      <div class="buttons-container">
-        <button class="btn btn-primary" @click="createRoom">
-          Создать комнату
-        </button>
-        <button class="btn btn-secondary" @click="joinRoom">
-          Присоединиться к комнате
-        </button>
-      </div>
-    </div>
+  <div class="wrapper">
+    <video
+      class="video"
+      autoplay
+      playsinline
+      ref="my_video_ref"
+      muted
+      id="my-video"
+    ></video>
+    <video class="video" ref="remote_video_ref" id="remote-video"></video>
+
+    <button :disabled="disabled" @click="callFn" class="join-room__btn">
+      Join room
+    </button>
   </div>
 </template>
 
-<script setup>
+<script setup >
+import { onMounted, reactive, ref } from "vue";
 import { socket } from "../socket/socket";
-import { useRouter } from "vue-router";
-import { v4 } from "uuid";
-const router = useRouter();
-const createRoom = () => {
-  const name = prompt("ВВедите имя");
-  const roomId = v4();
-  socket.emit("create-room", {
-    roomId,
-    userId: v4(),
-    userData: {
-      name,
-      type: "participant",
-    },
-    settings: {
-      maxUsers: 10,
-      isPublic: true,
-    },
+import randomName from "@scaleway/random-name";
+
+//// variables
+const my_video_ref = ref(null);
+const remote_video_ref = ref(null);
+const disabled = ref(false);
+const remoteUser = reactive({});
+const pc = new RTCPeerConnection({
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun.l.google.com:5349" },
+    { urls: "stun:stun1.l.google.com:3478" },
+    { urls: "stun:stun1.l.google.com:5349" },
+  ],
+});
+
+const localMedieStream = ref(null);
+const userMediaStream = ref(null);
+
+/// functions
+const callFn = async () => {
+  if (!localMedieStream.value) {
+    alert("Включите камеру");
+    return null;
+  }
+  socket.emit("join", {
+    room: "room_123",
+    name: randomName(),
   });
-  router.push(`/room/${roomId}`);
+  disabled.value = true;
 };
 
-const joinRoom = () => {
-  const name = prompt("ВВедите имя");
-  const roomId = prompt("ВВедите id комнаты");
-  socket.emit("join-room", {
-    roomId,
-    userId: v4(),
-    userData: {
-      name,
-      type: "participant",
-    },
+/// pc handlers
+
+pc.onicecandidate = (e) => {
+  const { candidate } = e;
+  if (!candidate || !remoteUser.id) {
+    return null;
+  }
+  socket.emit("candidate", {
+    target: remoteUser.id,
+    candidate,
   });
-  router.push(`/room/${roomId}`);
-  console.log("Присоединение к комнате");
+  console.log("new ice candidate", candidate);
 };
+
+pc.addEventListener("track", (e) => {
+  const mediaStream = e.streams[0];
+  console.log(mediaStream);
+  remote_video_ref.value.srcObject = mediaStream;
+});
+/// sockets_handlers
+
+socket.on("user_joined", async (user) => {
+  console.log("✅ New user joined:", user);
+  remoteUser.id = user.user.id;
+  localMedieStream.value.getTracks().forEach((track) => {
+    pc.addTrack(track, localMedieStream.value);
+  });
+
+  const offer = await pc.createOffer();
+
+  pc.setLocalDescription(offer);
+  socket.emit("offer", {
+    target: user.user.id,
+    sdp: offer,
+  });
+});
+socket.on("getOffer", async (sdp) => {
+  if (!sdp.sdp) {
+    return null;
+  }
+  localMedieStream.value.getTracks().forEach((track) => {
+    pc.addTrack(track, localMedieStream.value);
+  });
+
+  await pc.setRemoteDescription(sdp.sdp);
+
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  socket.emit("answer", {
+    target: sdp.sender,
+    sdp: answer,
+  });
+
+  console.log("📨 get offer:", sdp);
+});
+
+socket.on("getAnswer", async (sdp) => {
+  if (!sdp.sdp) {
+    return null;
+  }
+  await pc.setRemoteDescription(sdp.sdp);
+});
+
+socket.on("getCandidate", async ({ candidate }) => {
+  console.log("thi is candidate", candidate);
+  await pc.addIceCandidate(candidate);
+});
+/// hooks
+onMounted(async () => {
+  const mediaStream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: true,
+  });
+  if (my_video_ref.value) {
+    my_video_ref.value.srcObject = mediaStream;
+    localMedieStream.value = mediaStream;
+  }
+  console.log(mediaStream);
+});
 </script>
 
-<style lang="scss" scoped>
-.main-container {
+<style scoped>
+.wrapper {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 20px;
-}
-
-.content {
-  text-align: center;
-  background: white;
-  padding: 40px;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  max-width: 400px;
-  width: 100%;
-}
-
-.title {
-  color: #333;
-  margin-bottom: 30px;
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.buttons-container {
-  display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
+  padding: 20px;
+  min-height: 100vh;
 }
 
-.btn {
-  padding: 14px 24px;
-  border: none;
+.video {
+  border: 2px solid #007bff;
   border-radius: 8px;
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 800px;
+  height: 450px;
+  background-color: #000;
+  object-fit: cover;
+}
+.join-room__btn {
+  background: none;
+  border: none;
+  font-size: 30px;
+  border: 1px solid gray;
+  min-width: 500px;
+  background: lightgray;
+  border-radius: 10px;
+}
+@media (max-width: 768px) {
+  .video {
+    height: 300px;
+    max-width: 100%;
   }
 
-  &:active {
-    transform: translateY(0);
-  }
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-secondary {
-  background: transparent;
-  color: #667eea;
-  border: 2px solid #667eea;
-
-  &:hover {
-    background: #667eea;
-    color: white;
+  .wrapper {
+    gap: 10px;
+    padding: 10px;
   }
 }
 </style>

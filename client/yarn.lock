@@ -371,6 +371,11 @@
   resolved "https://registry.yarnpkg.com/@rollup/rollup-win32-x64-msvc/-/rollup-win32-x64-msvc-4.52.4.tgz#5b2dd648a960b8fa00d76f2cc4eea2f03daa80f4"
   integrity sha512-bf9PtUa0u8IXDVxzRToFQKsNCRz9qLYfR/MpECxl4mRoWYjAeFjgxj1XdZr2M/GNVpT05p+LgQOHopYDlUu6/w==
 
+"@scaleway/random-name@^5.1.2":
+  version "5.1.2"
+  resolved "https://registry.yarnpkg.com/@scaleway/random-name/-/random-name-5.1.2.tgz#075b96546f6d91e45ba4df5a7ed6406c9e25922c"
+  integrity sha512-WBiqKPnJdncl2mcA7t89rZrxaSIRF/eiyo69sbIiVsOj413+zg3Royzv4ddkRdNTnNg0l21GZpA6O8pfZyPAQQ==
+
 "@socket.io/component-emitter@~3.1.0":
   version "3.1.2"
   resolved "https://registry.yarnpkg.com/@socket.io/component-emitter/-/component-emitter-3.1.2.tgz#821f8442f4175d8f0467b9daf26e3a18e2d02af2"

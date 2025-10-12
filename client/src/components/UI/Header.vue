@@ -31,8 +31,12 @@ const props = defineProps({
 const store = useLocalMedia();
 
 const enableVideo = async () => {
+  if (store.isVideoEnabled) {
+    return store.setVideoMedia(null, props.videoRef);
+  }
   const videoMedia = await navigator.mediaDevices.getUserMedia({
     video: true,
+    audio: false,
   });
 
   if (!videoMedia.active) {
@@ -41,14 +45,18 @@ const enableVideo = async () => {
   store.setVideoMedia(videoMedia, props.videoRef);
 };
 const enableAudio = async () => {
-  const videoMedia = await navigator.mediaDevices.getUserMedia({
+  if (store.isAudioEnabled) {
+    return store.setAudioMedia(null, props.videoRef);
+  }
+  const audioMedia = await navigator.mediaDevices.getUserMedia({
     audio: true,
+    video: false,
   });
 
-  if (!videoMedia.active) {
+  if (!audioMedia.active) {
     return;
   }
-  store.setAudioMedia(videoMedia, props.videoRef);
+  store.setAudioMedia(audioMedia, props.videoRef);
 };
 </script>
 

@@ -5,6 +5,7 @@
       class="video"
       autoplay
       playsinline
+      :srcObject="store.localMedia"
       ref="my_video_ref"
       muted
       id="my-video"
@@ -39,11 +40,11 @@ import { useLocalMedia } from "../stores/local-media";
 //// variables
 
 const { setAudioMedia, setVideoMedia } = useLocalMedia();
-
+const store = useLocalMedia();
 const my_video_ref = ref(null);
 const remote_video_ref = ref(null);
 const disabled = ref(false);
-const localMedieStream = ref(null);
+
 const remoteMediaStreams = ref([]);
 // Хранилище для peer connections (для каждого пользователя отдельное)
 const peerConnections = new Map();
@@ -51,7 +52,7 @@ const pendingCandidates = new Map();
 
 /// functions
 const callFn = async () => {
-  if (!localMedieStream.value) {
+  if (!store.localMedia) {
     alert("Включите камеру");
     return null;
   }
@@ -118,8 +119,9 @@ socket.on("user_joined", async (user) => {
   const userId = user.user.id;
   try {
     const pc = createPeerConnection(userId);
-    localMedieStream.value.getTracks().forEach((track) => {
-      pc.addTrack(track, localMedieStream.value);
+
+    store.localMedia.getTracks().forEach((track) => {
+      pc.addTrack(track, store.localMedia);
       console.log(`➕ Добавлен track: ${track.kind}`);
     });
 
@@ -143,8 +145,8 @@ socket.on("getOffer", async (sdp) => {
   try {
     const pc = createPeerConnection(userId);
 
-    localMedieStream.value.getTracks().forEach((track) => {
-      pc.addTrack(track, localMedieStream.value);
+    store.localMedia.getTracks().forEach((track) => {
+      pc.addTrack(track, store.localMedia);
     });
     await pc.setRemoteDescription(sdp.sdp);
     const pending = pendingCandidates.get(userId) || [];
@@ -229,16 +231,14 @@ onMounted(async () => {
       video: true,
     });
     mediaStream.getTracks().forEach((track) => {
+      console.log(track);
       if (track.kind === "audio") {
         setAudioMedia(track);
-      } else {
-        setVideoMedia(track, my_video_ref);
+      }
+      if (track.kind === "video") {
+        setVideoMedia(track);
       }
     });
-    if (my_video_ref.value) {
-      my_video_ref.value.srcObject = mediaStream;
-      localMedieStream.value = mediaStream;
-    }
   } catch (error) {
     return alert("Не удалось получить доступ к камере/микрофону");
   }
@@ -249,8 +249,8 @@ onUnmounted(() => {
   peerConnections.clear();
   pendingCandidates.clear();
   remoteMediaStreams.value = [];
-  if (localMedieStream.value) {
-    localMedieStream.value.getTracks().forEach((track) => track.stop());
+  if (store.localMedia) {
+    store.localMedia.getTracks().forEach((track) => track.stop());
   }
 });
 </script>

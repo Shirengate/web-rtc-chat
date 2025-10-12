@@ -9,9 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/montserrat": "^5.2.8",
+    "@primeuix/themes": "^1.2.5",
     "@scaleway/random-name": "^5.1.2",
     "freeice": "^2.2.2",
     "pinia": "^3.0.3",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.4.1",
     "sass-embedded": "^1.93.2",
     "socket.io-client": "^4.8.1",
     "uuid": "^13.0.0",

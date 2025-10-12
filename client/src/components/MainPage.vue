@@ -1,4 +1,5 @@
 <template>
+  <Header :videoRef="my_video_ref" />
   <div class="wrapper">
     <video
       class="video"
@@ -19,9 +20,12 @@
       id="remote-video"
     ></video>
 
-    <button :disabled="disabled" @click="callFn" class="join-room__btn">
-      Join room
-    </button>
+    <Button
+      label="Join room"
+      :disabled="disabled"
+      @click="callFn"
+      class="join-room__btn"
+    />
   </div>
 </template>
 
@@ -29,13 +33,17 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import { socket } from "../socket/socket";
 import randomName from "@scaleway/random-name";
-
+import Button from "primevue/button";
+import Header from "./UI/Header.vue";
+import { useLocalMedia } from "../stores/local-media";
 //// variables
+
+const { setAudioMedia, setVideoMedia } = useLocalMedia();
+
 const my_video_ref = ref(null);
 const remote_video_ref = ref(null);
 const disabled = ref(false);
 const localMedieStream = ref(null);
-
 const remoteMediaStreams = ref([]);
 // Хранилище для peer connections (для каждого пользователя отдельное)
 const peerConnections = new Map();
@@ -55,8 +63,6 @@ const callFn = async () => {
 };
 
 const createPeerConnection = (userId) => {
-  console.log(`🔧 Создание PC для пользователя: ${userId}`);
-
   const pc = new RTCPeerConnection({
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
@@ -87,21 +93,10 @@ const createPeerConnection = (userId) => {
         target: userId,
         candidate: e.candidate,
       });
-      console.log(
-        `📤 Отправлен ICE candidate для ${userId}:`,
-        e.candidate.type
-      );
-    } else {
-      console.log(`❄️ ICE gathering завершён для ${userId}`);
     }
   };
-
   pc.addEventListener("track", (e) => {
     const mediaStream = e.streams[0];
-    console.log(mediaStream);
-    if (remote_video_ref.value) {
-      remote_video_ref.value.srcObject = mediaStream;
-    }
     if (remoteMediaStreams.value.find((m) => m.id === userId)) {
       return;
     }
@@ -120,9 +115,7 @@ const createPeerConnection = (userId) => {
 /// Socket handlers
 
 socket.on("user_joined", async (user) => {
-  console.log("✅ Новый пользователь присоединился:", user);
   const userId = user.user.id;
-
   try {
     const pc = createPeerConnection(userId);
     localMedieStream.value.getTracks().forEach((track) => {
@@ -130,59 +123,43 @@ socket.on("user_joined", async (user) => {
       console.log(`➕ Добавлен track: ${track.kind}`);
     });
 
-    // Создаём offer
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // Отправляем offer
     socket.emit("offer", {
       target: userId,
       sdp: offer,
     });
-    console.log(`📨 Отправлен offer для ${userId}`);
   } catch (error) {
-    console.error("❌ Ошибка в user_joined:", error);
+    return;
   }
 });
 
 socket.on("getOffer", async (sdp) => {
   if (!sdp.sdp || !sdp.sender) {
-    console.error("❌ Некорректный offer");
     return;
   }
-
-  console.log(`📨 Получен offer от ${sdp.sender}`);
   const userId = sdp.sender;
-
   try {
     const pc = createPeerConnection(userId);
 
     localMedieStream.value.getTracks().forEach((track) => {
       pc.addTrack(track, localMedieStream.value);
     });
-
-    await pc.setRemoteDescription(new RTCSessionDescription(sdp.sdp));
-    console.log(`✅ setRemoteDescription выполнен для ${userId}`);
-
+    await pc.setRemoteDescription(sdp.sdp);
     const pending = pendingCandidates.get(userId) || [];
-    console.log(
-      `📦 Применение ${pending.length} накопленных candidates для ${userId}`
-    );
     for (const candidate of pending) {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      await pc.addIceCandidate(candidate);
     }
     pendingCandidates.set(userId, []);
-
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-
     socket.emit("answer", {
       target: userId,
       sdp: answer,
     });
-    console.log(`📨 Отправлен answer для ${userId}`);
   } catch (error) {
-    console.error("❌ Ошибка в getOffer:", error);
+    return;
   }
 });
 
@@ -199,14 +176,14 @@ socket.on("getAnswer", async (sdp) => {
       return;
     }
 
-    await pc.setRemoteDescription(new RTCSessionDescription(sdp.sdp));
+    await pc.setRemoteDescription(sdp.sdp);
     const pending = pendingCandidates.get(userId) || [];
     for (const candidate of pending) {
       await pc.addIceCandidate(new RTCIceCandidate(candidate));
     }
     pendingCandidates.set(userId, []);
   } catch (error) {
-    console.error("❌ Ошибка в getAnswer:", error);
+    return;
   }
 });
 
@@ -215,25 +192,18 @@ socket.on("getCandidate", async ({ candidate, sender }) => {
     console.error("❌ Некорректный candidate");
     return;
   }
-
-  console.log(`📥 Получен candidate от ${sender}`);
-
   try {
     const pc = peerConnections.get(sender);
 
     if (pc && pc.remoteDescription && pc.remoteDescription.type) {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
-      console.log(`✅ Candidate добавлен для ${sender}`);
+      await pc.addIceCandidate(candidate);
     } else {
       const pending = pendingCandidates.get(sender) || [];
       pending.push(candidate);
       pendingCandidates.set(sender, pending);
-      console.log(
-        `⏳ Candidate добавлен в буфер для ${sender}. Всего в буфере: ${pending.length}`
-      );
     }
   } catch (error) {
-    console.error(`❌ Ошибка при добавлении candidate для ${sender}:`, error);
+    return;
   }
 });
 
@@ -258,16 +228,19 @@ onMounted(async () => {
       audio: true,
       video: true,
     });
-
+    mediaStream.getTracks().forEach((track) => {
+      if (track.kind === "audio") {
+        setAudioMedia(track);
+      } else {
+        setVideoMedia(track, my_video_ref);
+      }
+    });
     if (my_video_ref.value) {
       my_video_ref.value.srcObject = mediaStream;
       localMedieStream.value = mediaStream;
     }
-
-    console.log("📹 Локальный медиа поток получен");
   } catch (error) {
-    console.error("❌ Ошибка получения медиа потока:", error);
-    alert("Не удалось получить доступ к камере/микрофону");
+    return alert("Не удалось получить доступ к камере/микрофону");
   }
 });
 
@@ -303,23 +276,6 @@ onUnmounted(() => {
   object-fit: cover;
 }
 
-.join-room__btn {
-  background: none;
-  border: none;
-  font-size: 30px;
-  border: 1px solid gray;
-  min-width: 500px;
-  background: lightgray;
-  border-radius: 10px;
-  cursor: pointer;
-  padding: 10px;
-}
-
-.join-room__btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .status {
   font-size: 18px;
   font-weight: bold;
@@ -337,11 +293,6 @@ onUnmounted(() => {
   .wrapper {
     gap: 10px;
     padding: 10px;
-  }
-
-  .join-room__btn {
-    min-width: 300px;
-    font-size: 20px;
   }
 }
 </style>

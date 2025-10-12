@@ -1,9 +1,13 @@
 import { io } from "socket.io-client";
 
-export const socket = io("https://ws-production-1f43.up.railway.app/", {
+const host = import.meta.env.DEV
+  ? import.meta.env.VITE_LOCALHOST
+  : import.meta.env.VITE_API_URL;
+
+export const socket = io(host, {
   transports: ["websocket", "polling", "flashsocket"],
   cors: {
-    origin: "https://ws-production-1f43.up.railway.app/",
+    origin: host,
     credentials: true,
   },
   withCredentials: true,

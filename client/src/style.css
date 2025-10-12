@@ -1,0 +1,12 @@
+* {
+  font-family: "Montserrat", sans-serif;
+}
+
+/* Или более специфично для PrimeVue */
+:root {
+  --font-family: "Montserrat", sans-serif;
+}
+
+body {
+  font-family: "Montserrat", sans-serif;
+}

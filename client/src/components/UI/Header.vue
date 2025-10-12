@@ -42,7 +42,9 @@ const enableVideo = async () => {
   if (!videoMedia.active) {
     return;
   }
-  store.setVideoMedia(videoMedia, props.videoRef);
+  videoMedia.getTracks().forEach((track) => {
+    store.setVideoMedia(track);
+  });
 };
 const enableAudio = async () => {
   if (store.isAudioEnabled) {
@@ -56,7 +58,10 @@ const enableAudio = async () => {
   if (!audioMedia.active) {
     return;
   }
-  store.setAudioMedia(audioMedia, props.videoRef);
+
+  audioMedia.getTracks().forEach((track) => {
+    store.setAudioMedia(track);
+  });
 };
 </script>
 

@@ -26,7 +26,6 @@
             autoplay
             playsinline
             :srcObject="media.mediaStream"
-            ref="remote_video_ref"
             :id="`remote-video-${index}`"
           ></video>
           <div class="video-overlay">
@@ -45,13 +44,10 @@ import Conference from "../components/UI/Conference.vue";
 import { useLocalMedia } from "../stores/local-media";
 import { useEnableDevice } from "../composables/use-enable-device";
 //// variables
-
 const { enableDevice } = useEnableDevice();
 const { setAudioMedia, setVideoMedia } = useLocalMedia();
 const store = useLocalMedia();
 const my_video_ref = ref(null);
-const remote_video_ref = ref(null);
-``;
 const remoteMediaStreams = ref([]);
 const peerConnections = new Map();
 const pendingCandidates = new Map();
@@ -240,26 +236,6 @@ socket.on("user_left", (data) => {
       );
     }
     pendingCandidates.delete(userId);
-  }
-});
-
-onMounted(async () => {
-  try {
-    const mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: true,
-    });
-    mediaStream.getTracks().forEach((track) => {
-      console.log(track);
-      if (track.kind === "audio") {
-        setAudioMedia(track);
-      }
-      if (track.kind === "video") {
-        setVideoMedia(track);
-      }
-    });
-  } catch (error) {
-    return alert("Не удалось получить доступ к камере/микрофону");
   }
 });
 

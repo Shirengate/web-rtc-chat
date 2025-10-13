@@ -70,6 +70,7 @@ import { useRouter } from "vue-router";
 const { setAudioMedia, setVideoMedia } = useLocalMedia();
 import { socket } from "../socket/socket";
 import randomName from "@scaleway/random-name";
+import axios from "axios";
 const store = useLocalMedia();
 const my_video_ref = ref(null);
 const disabled = ref(false);
@@ -77,22 +78,26 @@ const router = useRouter();
 // Данные формы
 const newRoomName = ref("");
 const selectedRoom = ref(null);
-const rooms = ref([
-  { id: "room_1", name: "Общая комната" },
-  { id: "room_2", name: "Команда разработки" },
-  { id: "room_3", name: "Встреча с клиентом" },
-]);
-
+const rooms = ref([]);
 const callFn = async () => {
+  let roomName;
+  if (newRoomName.value) {
+    roomName = newRoomName.value;
+  } else if (selectedRoom.value) {
+    roomName = selectedRoom.value;
+  } else {
+    alert("Введите название комнаты или выберите существующую");
+    return null;
+  }
   if (!store.localMedia) {
-    alert("Включите камеру");
+    alert("Включите камеру и аудио");
     return null;
   }
   socket.emit("join", {
-    room: "room_123",
+    room: roomName,
     name: randomName(),
   });
-  router.push(`/room/room_123`);
+  router.push(`/room/${roomName}`);
   disabled.value = true;
 };
 
@@ -106,7 +111,24 @@ watch(newRoomName, (newVal) => {
     selectedRoom.value = null;
   }
 });
+
+async function getRooms() {
+  try {
+    const response = await axios.get("http://localhost:8000/rooms");
+    if (Object.keys(response.data.rooms).length > 0) {
+      for (const roomId in response.data.rooms) {
+        rooms.value.push({
+          id: roomId,
+          name: response.data.rooms[roomId].name || roomId,
+        });
+      }
+    }
+  } catch (e) {
+    return e;
+  }
+}
 onMounted(async () => {
+  await getRooms();
   try {
     const mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: true,
@@ -120,14 +142,9 @@ onMounted(async () => {
         setVideoMedia(track);
       }
     });
+    console.log(store.localMedia);
   } catch (error) {
     return alert("Не удалось получить доступ к камере/микрофону");
-  }
-});
-
-onUnmounted(() => {
-  if (store.localMedia) {
-    store.localMedia.getTracks().forEach((track) => track.stop());
   }
 });
 </script>

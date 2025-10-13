@@ -1,9 +1,10 @@
 <template>
   <div class="wrapper">
-    <div class="conference-wrapper">
-      <conference :len="remoteMediaStreams.length + 1">
+    <div class="join-room__wrapper">
+      <div class="video-container">
+        <span>Проверьте аудио и видео</span>
         <video
-          class="video layout-inner-1"
+          class="video"
           autoplay
           playsinline
           :srcObject="store.localMedia"
@@ -11,51 +12,77 @@
           muted
           id="my-video"
         ></video>
-        <video
-          v-for="(media, index) in remoteMediaStreams"
-          :key="media.id"
-          :class="['video', `layout-inner-${index + 2}`]"
-          autoplay
-          playsinline
-          :srcObject="media.mediaStream"
-          ref="remote_video_ref"
-          id="remote-video"
-        ></video>
-      </conference>
-    </div>
+      </div>
 
-    <Button
-      label="Join room"
-      :disabled="disabled"
-      @click="callFn"
-      class="join-room__btn"
-    />
+      <div class="room-controls">
+        <div class="room-controls__content">
+          <h2 class="room-controls__title">Присоединиться к звонку</h2>
+
+          <div class="form-group">
+            <label for="create-room" class="form-label">Создать комнату</label>
+            <InputText
+              id="create-room"
+              v-model="newRoomName"
+              placeholder="Введите название комнаты"
+              class="form-input"
+            />
+          </div>
+
+          <div class="divider">
+            <span class="divider-text">или</span>
+          </div>
+
+          <!-- Выбрать существующую комнату -->
+          <div class="form-group">
+            <label for="select-room" class="form-label">Выбрать комнату</label>
+            <Select
+              id="select-room"
+              v-model="selectedRoom"
+              :options="rooms"
+              optionLabel="name"
+              optionValue="id"
+              placeholder="Выберите комнату"
+              class="form-select"
+            />
+          </div>
+
+          <!-- Кнопка присоединиться -->
+          <Button
+            label="Присоединиться"
+            icon="pi pi-video"
+            :disabled="disabled"
+            @click="callFn"
+            class="join-room__btn"
+          />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { onMounted, onUnmounted, ref, watch } from "vue";
+import Button from "primevue/button";
+import InputText from "primevue/inputtext";
+import Select from "primevue/select";
+import { useLocalMedia } from "../stores/local-media";
+import { useRouter } from "vue-router";
+const { setAudioMedia, setVideoMedia } = useLocalMedia();
 import { socket } from "../socket/socket";
 import randomName from "@scaleway/random-name";
-import Conference from "../components/UI/Conference.vue";
-import Button from "primevue/button";
-import { useLocalMedia } from "../stores/local-media";
-import { useEnableDevice } from "../composables/use-enable-device";
-//// variables
-
-const { enableDevice } = useEnableDevice();
-const { setAudioMedia, setVideoMedia } = useLocalMedia();
 const store = useLocalMedia();
 const my_video_ref = ref(null);
-const remote_video_ref = ref(null);
 const disabled = ref(false);
+const router = useRouter();
+// Данные формы
+const newRoomName = ref("");
+const selectedRoom = ref(null);
+const rooms = ref([
+  { id: "room_1", name: "Общая комната" },
+  { id: "room_2", name: "Команда разработки" },
+  { id: "room_3", name: "Встреча с клиентом" },
+]);
 
-const remoteMediaStreams = ref([]);
-// Хранилище для peer connections (для каждого пользователя отдельное)
-const peerConnections = new Map();
-const pendingCandidates = new Map();
-
-/// functions
 const callFn = async () => {
   if (!store.localMedia) {
     alert("Включите камеру");
@@ -65,194 +92,20 @@ const callFn = async () => {
     room: "room_123",
     name: randomName(),
   });
+  router.push(`/room/room_123`);
   disabled.value = true;
 };
 
-const createPeerConnection = (userId) => {
-  const pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-      { urls: "stun:stun2.l.google.com:19302" },
-      {
-        urls: "turn:openrelay.metered.ca:80",
-        username: "openrelayproject",
-        credential: "openrelayproject",
-      },
-      {
-        urls: "turn:openrelay.metered.ca:443",
-        username: "openrelayproject",
-        credential: "openrelayproject",
-      },
-      {
-        urls: "turn:openrelay.metered.ca:443?transport=tcp",
-        username: "openrelayproject",
-        credential: "openrelayproject",
-      },
-    ],
-    iceCandidatePoolSize: 10,
-  });
-
-  pc.onicecandidate = (e) => {
-    if (e.candidate) {
-      socket.emit("candidate", {
-        target: userId,
-        candidate: e.candidate,
-      });
-    }
-  };
-  pc.addEventListener("track", (e) => {
-    const mediaStream = e.streams[0];
-    if (remoteMediaStreams.value.find((m) => m.id === userId)) {
-      return;
-    }
-    remoteMediaStreams.value = [
-      ...remoteMediaStreams.value,
-      { id: userId, mediaStream },
-    ];
-  });
-
-  peerConnections.set(userId, pc);
-  pendingCandidates.set(userId, []);
-
-  return pc;
-};
-
-/// watchers
-
-watch(
-  () => store.isVideoEnabled,
-  (newVal) => {
-    if (newVal) {
-      enableDevice("video", peerConnections);
-    }
-  },
-  {
-    immediate: false,
-  }
-);
-watch(
-  () => store.isAudioEnabled,
-  async (newVal) => {
-    if (newVal) {
-      enableDevice("audio", peerConnections);
-    }
-  },
-  {
-    immediate: false,
-  }
-);
-/// Socket handlers
-
-socket.on("user_joined", async (user) => {
-  const userId = user.user.id;
-  try {
-    const pc = createPeerConnection(userId);
-
-    store.localMedia.getTracks().forEach((track) => {
-      pc.addTrack(track, store.localMedia);
-      console.log(`➕ Добавлен track: ${track.kind}`);
-    });
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    socket.emit("offer", {
-      target: userId,
-      sdp: offer,
-    });
-  } catch (error) {
-    return;
+watch(selectedRoom, (newVal) => {
+  if (newVal) {
+    newRoomName.value = "";
   }
 });
-
-socket.on("getOffer", async (sdp) => {
-  if (!sdp.sdp || !sdp.sender) {
-    return;
-  }
-  const userId = sdp.sender;
-  try {
-    const pc = createPeerConnection(userId);
-
-    store.localMedia.getTracks().forEach((track) => {
-      pc.addTrack(track, store.localMedia);
-    });
-    await pc.setRemoteDescription(sdp.sdp);
-    const pending = pendingCandidates.get(userId) || [];
-    for (const candidate of pending) {
-      await pc.addIceCandidate(candidate);
-    }
-    pendingCandidates.set(userId, []);
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    socket.emit("answer", {
-      target: userId,
-      sdp: answer,
-    });
-  } catch (error) {
-    return;
+watch(newRoomName, (newVal) => {
+  if (newVal) {
+    selectedRoom.value = null;
   }
 });
-
-socket.on("getAnswer", async (sdp) => {
-  if (!sdp.sdp || !sdp.sender) {
-    return;
-  }
-  const userId = sdp.sender;
-
-  try {
-    const pc = peerConnections.get(userId);
-    if (!pc) {
-      console.error(`❌ Peer connection не найден для ${userId}`);
-      return;
-    }
-
-    await pc.setRemoteDescription(sdp.sdp);
-    const pending = pendingCandidates.get(userId) || [];
-    for (const candidate of pending) {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    }
-    pendingCandidates.set(userId, []);
-  } catch (error) {
-    return;
-  }
-});
-
-socket.on("getCandidate", async ({ candidate, sender }) => {
-  if (!sender || !candidate) {
-    console.error("❌ Некорректный candidate");
-    return;
-  }
-  try {
-    const pc = peerConnections.get(sender);
-
-    if (pc && pc.remoteDescription && pc.remoteDescription.type) {
-      await pc.addIceCandidate(candidate);
-    } else {
-      const pending = pendingCandidates.get(sender) || [];
-      pending.push(candidate);
-      pendingCandidates.set(sender, pending);
-    }
-  } catch (error) {
-    return;
-  }
-});
-
-socket.on("user_left", (data) => {
-  const userId = data?.user?.id;
-  if (userId) {
-    const pc = peerConnections.get(userId);
-    if (pc) {
-      pc.close();
-      peerConnections.delete(userId);
-      remoteMediaStreams.value = remoteMediaStreams.value.filter(
-        (m) => m.id !== userId
-      );
-    }
-    pendingCandidates.delete(userId);
-  }
-});
-
 onMounted(async () => {
   try {
     const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -260,7 +113,6 @@ onMounted(async () => {
       video: true,
     });
     mediaStream.getTracks().forEach((track) => {
-      console.log(track);
       if (track.kind === "audio") {
         setAudioMedia(track);
       }
@@ -274,64 +126,189 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  peerConnections.forEach((pc) => pc.close());
-  peerConnections.clear();
-  pendingCandidates.clear();
-  remoteMediaStreams.value = [];
   if (store.localMedia) {
     store.localMedia.getTracks().forEach((track) => track.stop());
   }
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .wrapper {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   padding: 20px;
   box-sizing: border-box;
-  overflow: hidden;
-  position: relative;
-  height: 100%;
 }
 
-.conference-wrapper {
+.join-room__wrapper {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 40px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
   flex: 1;
 }
-
+.video-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  span {
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+  }
+}
 .video {
-  border: 2px solid #007bff;
-  border-radius: 8px;
+  border-radius: 20px;
   width: 100%;
-  height: 100%;
-  background-color: #000;
-  object-fit: cover;
+  max-width: 600px;
+  height: auto;
   aspect-ratio: 16/9;
+  object-fit: cover;
+  background-color: #000;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
-.status {
-  font-size: 18px;
-  font-weight: bold;
-  padding: 10px 20px;
-  background: #f0f0f0;
-  border-radius: 8px;
+.room-controls {
+  flex: 1;
+  max-width: 500px;
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
 }
 
+.room-controls__content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.room-controls__title {
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 4px;
+}
+
+.form-input,
+.form-select {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 15px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-input::placeholder {
+  color: #a0aec0;
+}
+
+.divider {
+  position: relative;
+  text-align: center;
+  margin: 8px 0;
+}
+
+.divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.divider-text {
+  position: relative;
+  display: inline-block;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #a0aec0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.join-room__btn {
+  width: 100%;
+  padding: 14px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  color: black;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  margin-top: 8px;
+}
+
+/* Адаптив для планшетов */
+@media (max-width: 1024px) {
+  .join-room__wrapper {
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  .video {
+    max-width: 100%;
+  }
+
+  .room-controls {
+    max-width: 100%;
+    width: 100%;
+  }
+}
+
+/* Адаптив для мобильных */
 @media (max-width: 768px) {
   .wrapper {
     padding: 15px;
   }
 
-  .join-room__btn {
-    bottom: 15px;
-    padding: 10px 20px;
-    min-width: 120px;
-    font-size: 14px;
+  .room-controls {
+    padding: 30px 20px;
+  }
+
+  .room-controls__title {
+    font-size: 24px;
   }
 
   .video {
-    border-width: 1px;
+    border-radius: 15px;
+  }
+
+  .room-controls {
+    border-radius: 15px;
   }
 }
 
@@ -339,29 +316,24 @@ onUnmounted(() => {
   .wrapper {
     padding: 10px;
   }
-  .join-room__btn {
-    bottom: 10px;
-    padding: 8px 16px;
+
+  .room-controls {
+    padding: 24px 16px;
+  }
+
+  .room-controls__title {
+    font-size: 20px;
+  }
+
+  .form-input,
+  .form-select {
+    padding: 10px 14px;
     font-size: 14px;
-    min-width: 100px;
   }
 
-  :deep(.grid-container) {
-    grid-gap: 2px;
-  }
-}
-
-@media (min-aspect-ratio: 16/9) {
-  :deep(.grid-container) {
-    width: auto;
-    height: 100%;
-  }
-}
-
-@media (max-aspect-ratio: 4/3) {
-  :deep(.grid-container) {
-    width: 100%;
-    height: auto;
+  .join-room__btn {
+    padding: 12px 20px;
+    font-size: 15px;
   }
 }
 </style>

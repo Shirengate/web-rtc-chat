@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref, computed, watch } from "vue";
+import { ref, computed } from "vue";
 
 export const useLocalMedia = defineStore("localMedia", () => {
   const localMedia = ref(null);

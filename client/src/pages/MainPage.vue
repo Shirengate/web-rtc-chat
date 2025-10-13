@@ -1,25 +1,28 @@
 <template>
-  <Header :videoRef="my_video_ref" />
   <div class="wrapper">
-    <video
-      class="video"
-      autoplay
-      playsinline
-      :srcObject="store.localMedia"
-      ref="my_video_ref"
-      muted
-      id="my-video"
-    ></video>
-    <video
-      v-for="media in remoteMediaStreams"
-      :key="media.id"
-      class="video"
-      autoplay
-      playsinline
-      :srcObject="media.mediaStream"
-      ref="remote_video_ref"
-      id="remote-video"
-    ></video>
+    <div class="conference-wrapper">
+      <conference :len="remoteMediaStreams.length + 1">
+        <video
+          class="video layout-inner-1"
+          autoplay
+          playsinline
+          :srcObject="store.localMedia"
+          ref="my_video_ref"
+          muted
+          id="my-video"
+        ></video>
+        <video
+          v-for="(media, index) in remoteMediaStreams"
+          :key="media.id"
+          :class="['video', `layout-inner-${index + 2}`]"
+          autoplay
+          playsinline
+          :srcObject="media.mediaStream"
+          ref="remote_video_ref"
+          id="remote-video"
+        ></video>
+      </conference>
+    </div>
 
     <Button
       label="Join room"
@@ -34,11 +37,13 @@
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { socket } from "../socket/socket";
 import randomName from "@scaleway/random-name";
+import Conference from "../components/UI/Conference.vue";
 import Button from "primevue/button";
-import Header from "./UI/Header.vue";
 import { useLocalMedia } from "../stores/local-media";
+import { useEnableDevice } from "../composables/use-enable-device";
 //// variables
 
+const { enableDevice } = useEnableDevice();
 const { setAudioMedia, setVideoMedia } = useLocalMedia();
 const store = useLocalMedia();
 const my_video_ref = ref(null);
@@ -117,34 +122,20 @@ const createPeerConnection = (userId) => {
 
 watch(
   () => store.isVideoEnabled,
-  async (newVal) => {
+  (newVal) => {
     if (newVal) {
-      const newVideoTrack = store.localMedia.getVideoTracks()[0];
-
-      for (const [_, pc] of peerConnections) {
-        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
-        if (sender) {
-          await sender.replaceTrack(newVideoTrack);
-        }
-      }
+      enableDevice("video", peerConnections);
     }
   },
   {
     immediate: false,
   }
 );
-
 watch(
   () => store.isAudioEnabled,
   async (newVal) => {
     if (newVal) {
-      const newAudioTrack = store.localMedia.getAudioTracks()[0];
-      for (const [_, pc] of peerConnections) {
-        const sender = pc.getSenders().find((s) => s.track?.kind === "audio");
-        if (sender) {
-          await sender.replaceTrack(newAudioTrack);
-        }
-      }
+      enableDevice("audio", peerConnections);
     }
   },
   {
@@ -296,22 +287,27 @@ onUnmounted(() => {
 <style scoped>
 .wrapper {
   display: flex;
-  justify-content: center;
-  align-items: center;
   flex-direction: column;
-  gap: 20px;
-  padding: 20px;
   min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+  height: 100%;
+}
+
+.conference-wrapper {
+  flex: 1;
 }
 
 .video {
   border: 2px solid #007bff;
   border-radius: 8px;
   width: 100%;
-  max-width: 800px;
-  height: 450px;
+  height: 100%;
   background-color: #000;
   object-fit: cover;
+  aspect-ratio: 16/9;
 }
 
 .status {
@@ -323,14 +319,49 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
-  .video {
-    height: 300px;
-    max-width: 100%;
+  .wrapper {
+    padding: 15px;
   }
 
+  .join-room__btn {
+    bottom: 15px;
+    padding: 10px 20px;
+    min-width: 120px;
+    font-size: 14px;
+  }
+
+  .video {
+    border-width: 1px;
+  }
+}
+
+@media (max-width: 480px) {
   .wrapper {
-    gap: 10px;
     padding: 10px;
+  }
+  .join-room__btn {
+    bottom: 10px;
+    padding: 8px 16px;
+    font-size: 14px;
+    min-width: 100px;
+  }
+
+  :deep(.grid-container) {
+    grid-gap: 2px;
+  }
+}
+
+@media (min-aspect-ratio: 16/9) {
+  :deep(.grid-container) {
+    width: auto;
+    height: 100%;
+  }
+}
+
+@media (max-aspect-ratio: 4/3) {
+  :deep(.grid-container) {
+    width: 100%;
+    height: auto;
   }
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <Toolbar style="height: 100%">
+  <Toolbar style="height: 100%; position: sticky; top: 5px; z-index: 10">
     <template #start>
       <div class="options">
         <Button
@@ -24,15 +24,11 @@ import ToggleSwitch from "primevue/toggleswitch";
 import Button from "primevue/button";
 import { useLocalMedia } from "../../stores/local-media";
 
-const props = defineProps({
-  videoRef: Object,
-});
-
 const store = useLocalMedia();
 
 const enableVideo = async () => {
   if (store.isVideoEnabled) {
-    return store.setVideoMedia(null, props.videoRef);
+    return store.setVideoMedia(null);
   }
   const videoMedia = await navigator.mediaDevices.getUserMedia({
     video: true,
@@ -48,7 +44,7 @@ const enableVideo = async () => {
 };
 const enableAudio = async () => {
   if (store.isAudioEnabled) {
-    return store.setAudioMedia(null, props.videoRef);
+    return store.setAudioMedia(null);
   }
   const audioMedia = await navigator.mediaDevices.getUserMedia({
     audio: true,

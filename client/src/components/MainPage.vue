@@ -31,7 +31,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { socket } from "../socket/socket";
 import randomName from "@scaleway/random-name";
 import Button from "primevue/button";
@@ -113,6 +113,44 @@ const createPeerConnection = (userId) => {
   return pc;
 };
 
+/// watchers
+
+watch(
+  () => store.isVideoEnabled,
+  async (newVal) => {
+    if (newVal) {
+      const newVideoTrack = store.localMedia.getVideoTracks()[0];
+
+      for (const [_, pc] of peerConnections) {
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) {
+          await sender.replaceTrack(newVideoTrack);
+        }
+      }
+    }
+  },
+  {
+    immediate: false,
+  }
+);
+
+watch(
+  () => store.isAudioEnabled,
+  async (newVal) => {
+    if (newVal) {
+      const newAudioTrack = store.localMedia.getAudioTracks()[0];
+      for (const [_, pc] of peerConnections) {
+        const sender = pc.getSenders().find((s) => s.track?.kind === "audio");
+        if (sender) {
+          await sender.replaceTrack(newAudioTrack);
+        }
+      }
+    }
+  },
+  {
+    immediate: false,
+  }
+);
 /// Socket handlers
 
 socket.on("user_joined", async (user) => {

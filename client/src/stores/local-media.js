@@ -15,6 +15,12 @@ export const useLocalMedia = defineStore("localMedia", () => {
   });
 
   const setVideoMedia = (track) => {
+    if (track === null) {
+      const videoTrack = localMedia.value.getVideoTracks()[0];
+      videoTrack.enabled = false;
+      localVideo.value = null;
+      return;
+    }
     localVideo.value = track;
     if (!localMedia.value) {
       localMedia.value = new MediaStream();
@@ -28,6 +34,12 @@ export const useLocalMedia = defineStore("localMedia", () => {
   };
 
   const setAudioMedia = (track) => {
+    if (track === null) {
+      const audioTrack = localMedia.value.getAudioTracks()[0];
+      audioTrack.enabled = false;
+      localAudio.value = null;
+      return;
+    }
     localAudio.value = track;
 
     if (!localMedia.value) {
@@ -42,8 +54,6 @@ export const useLocalMedia = defineStore("localMedia", () => {
       localMedia.value.addTrack(track);
     }
   };
-
-  // Вотчер для видео
 
   return {
     isAudioEnabled,

@@ -6,62 +6,94 @@ export const useLocalMedia = defineStore("localMedia", () => {
   const localVideo = ref(null);
   const localAudio = ref(null);
 
-  const isVideoEnabled = computed(() => {
-    return localVideo.value !== null;
-  });
+  const isVideoActive = ref(true);
+  const isAudioActive = ref(true);
 
-  const isAudioEnabled = computed(() => {
-    return localAudio.value !== null;
-  });
+  const isVideoEnabled = computed(() => !!localVideo.value);
+  const isAudioEnabled = computed(() => !!localAudio.value);
+
+  const toggleVideo = async () => {
+    const videoTrack = localMedia.value?.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      isVideoActive.value = videoTrack.enabled;
+    } else {
+      const videoMedia = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+      if (!videoMedia.active) {
+        return;
+      }
+      videoMedia.getTracks().forEach((track) => {
+        setVideoMedia(track);
+      });
+    }
+  };
+
+  const toggleAudio = async () => {
+    const audioTrack = localMedia.value?.getAudioTracks()[0];
+    console.log(audioTrack);
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      isAudioActive.value = audioTrack.enabled;
+    } else {
+      const audioMedia = await navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: true,
+      });
+      if (!audioMedia.active) {
+        return;
+      }
+      audioMedia.getTracks().forEach((track) => {
+        setAudioMedia(track);
+      });
+    }
+  };
 
   const setVideoMedia = (track) => {
-    if (track === null) {
-      const videoTrack = localMedia.value.getVideoTracks()[0];
-      videoTrack.enabled = false;
-      localVideo.value = null;
-      return;
-    }
     localVideo.value = track;
     if (!localMedia.value) {
       localMedia.value = new MediaStream();
     }
-    localMedia.value.getVideoTracks().forEach((oldTrack) => {
-      localMedia.value.removeTrack(oldTrack);
+    localMedia.value.getVideoTracks().forEach((t) => {
+      localMedia.value.removeTrack(t);
     });
     if (track) {
       localMedia.value.addTrack(track);
+      isVideoActive.value = true;
+    } else {
+      isVideoActive.value = false;
     }
   };
 
   const setAudioMedia = (track) => {
-    if (track === null) {
-      const audioTrack = localMedia.value.getAudioTracks()[0];
-      audioTrack.enabled = false;
-      localAudio.value = null;
-      return;
-    }
     localAudio.value = track;
-
     if (!localMedia.value) {
       localMedia.value = new MediaStream();
     }
-
-    localMedia.value.getAudioTracks().forEach((oldTrack) => {
-      localMedia.value.removeTrack(oldTrack);
+    localMedia.value.getAudioTracks().forEach((t) => {
+      localMedia.value.removeTrack(t);
     });
-
     if (track) {
       localMedia.value.addTrack(track);
+      isAudioActive.value = true;
+    } else {
+      isAudioActive.value = false;
     }
   };
 
   return {
-    isAudioEnabled,
-    isVideoEnabled,
     localMedia,
     localVideo,
     localAudio,
+    isVideoEnabled,
+    isAudioEnabled,
+    isVideoActive,
+    isAudioActive,
     setAudioMedia,
     setVideoMedia,
+    toggleVideo,
+    toggleAudio,
   };
 });

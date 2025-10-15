@@ -3,13 +3,17 @@
     <template #start>
       <div class="options">
         <Button
-          @click="enableVideo"
-          :severity="store.isVideoEnabled ? 'contrast' : 'danger'"
+          @click="store.toggleVideo()"
+          :severity="
+            store.isVideoActive && store.isVideoEnabled ? 'contrast' : 'danger'
+          "
           icon="pi pi-camera"
         />
         <Button
-          @click="enableAudio"
-          :severity="store.isAudioEnabled ? 'contrast' : 'danger'"
+          @click="store.toggleAudio()"
+          :severity="
+            store.isAudioActive && store.isAudioEnabled ? 'contrast' : 'danger'
+          "
           icon="pi pi-microphone"
         />
       </div>

@@ -38,14 +38,11 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { onUnmounted, ref, watch } from "vue";
 import { socket } from "../socket/socket";
 import Conference from "../components/UI/Conference.vue";
 import { useLocalMedia } from "../stores/local-media";
-import { useEnableDevice } from "../composables/use-enable-device";
 //// variables
-const { enableDevice } = useEnableDevice();
-const { setAudioMedia, setVideoMedia } = useLocalMedia();
 const store = useLocalMedia();
 const my_video_ref = ref(null);
 const remoteMediaStreams = ref([]);
@@ -88,48 +85,50 @@ const createPeerConnection = (userId) => {
     }
   };
   pc.addEventListener("track", (e) => {
-    const mediaStream = e.streams[0];
-    if (remoteMediaStreams.value.find((m) => m.id === userId)) {
-      return;
+    let currentUser = remoteMediaStreams.value.find((m) => m.id === userId);
+    if (!currentUser) {
+      currentUser = {
+        id: userId,
+        mediaStream: new MediaStream(),
+        isVideoMuted: track.kind === "video" ? track.muted : false,
+        isAudioMuted: track.kind === "audio" ? track.muted : false,
+      };
+      remoteMediaStreams.value.push(currentUser);
     }
-    remoteMediaStreams.value = [
-      ...remoteMediaStreams.value,
-      { id: userId, mediaStream },
-    ];
+    currentUser.mediaStream.addTrack(track);
+    track.onmute = () => {
+      console.log(`${userId} is mute track`);
+      const user = remoteMediaStreams.value.find((u) => u.id === userId);
+      if (user) {
+        if (track.kind === "video") user.isVideoMuted = true;
+        if (track.kind === "audio") user.isAudioMuted = true;
+      }
+    };
+    track.onunmute = () => {
+      console.log(`${userId} is unmute track`);
+      const user = remoteMediaStreams.value.find((u) => u.id === userId);
+      if (user) {
+        if (track.kind === "video") user.isVideoMuted = false;
+        if (track.kind === "audio") user.isAudioMuted = false;
+      }
+    };
   });
-
   peerConnections.set(userId, pc);
   pendingCandidates.set(userId, []);
 
   return pc;
 };
 
-/// watchers
-
 watch(
-  () => store.isVideoEnabled,
+  remoteMediaStreams,
   (newVal) => {
-    if (newVal) {
-      enableDevice("video", peerConnections);
-    }
+    console.log(newVal);
   },
   {
-    immediate: false,
-  }
-);
-watch(
-  () => store.isAudioEnabled,
-  async (newVal) => {
-    if (newVal) {
-      enableDevice("audio", peerConnections);
-    }
-  },
-  {
-    immediate: false,
+    deep: true,
   }
 );
 /// Socket handlers
-
 socket.on("user_joined", async (user) => {
   const userId = user.user.id;
   try {

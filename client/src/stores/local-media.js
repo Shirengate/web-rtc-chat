@@ -1,3 +1,5 @@
+import { socket } from "../socket/socket.js";
+
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 
@@ -17,6 +19,9 @@ export const useLocalMedia = defineStore("localMedia", () => {
     if (videoTrack) {
       videoTrack.enabled = !videoTrack.enabled;
       isVideoActive.value = videoTrack.enabled;
+      socket.emit("toggle_video", {
+        videoEnabled: videoTrack.enabled,
+      });
     } else {
       const videoMedia = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -28,6 +33,9 @@ export const useLocalMedia = defineStore("localMedia", () => {
       videoMedia.getTracks().forEach((track) => {
         setVideoMedia(track);
       });
+      socket.emit("toggle_video", {
+        videoEnabled: true,
+      });
     }
   };
 
@@ -37,6 +45,9 @@ export const useLocalMedia = defineStore("localMedia", () => {
     if (audioTrack) {
       audioTrack.enabled = !audioTrack.enabled;
       isAudioActive.value = audioTrack.enabled;
+      socket.emit("toggle_audio", {
+        audioEnabled: audioTrack.enabled,
+      });
     } else {
       const audioMedia = await navigator.mediaDevices.getUserMedia({
         video: false,
@@ -47,6 +58,9 @@ export const useLocalMedia = defineStore("localMedia", () => {
       }
       audioMedia.getTracks().forEach((track) => {
         setAudioMedia(track);
+      });
+      socket.emit("toggle_audio", {
+        audioEnabled: true,
       });
     }
   };

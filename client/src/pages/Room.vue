@@ -2,35 +2,27 @@
   <div class="wrapper">
     <div class="conference-wrapper">
       <conference :participantCount="remoteMediaStreams.length + 1">
-        <div class="video-container">
-          <video
-            class="video"
-            autoplay
-            playsinline
+        <div class="conf-wrapper">
+          <Video
+            :me="true"
+            :name="userStore.info.name"
+            :cameraEnabled="store.isVideoActive"
+            :microEnabled="store.isAudioActive"
             :srcObject="store.localMedia"
-            ref="my_video_ref"
-            muted
-            id="my-video"
-          ></video>
-          <div class="video-overlay">
-            <span class="participant-name">Вы</span>
-          </div>
+          />
         </div>
         <div
           v-for="(media, index) in remoteMediaStreams"
           :key="media.id"
-          class="video-container"
+          class="conf-wrapper"
         >
-          <video
-            class="video"
-            autoplay
-            playsinline
+          <Video
+            :me="false"
             :srcObject="media.mediaStream"
-            :id="`remote-video-${index}`"
-          ></video>
-          <div class="video-overlay">
-            <span class="participant-name">Участник {{ index + 1 }}</span>
-          </div>
+            :microEnabled="media.microEnabled"
+            :cameraEnabled="media.cameraEnabled"
+            :userName="'name 1'"
+          />
         </div>
       </conference>
     </div>
@@ -42,13 +34,14 @@ import { onUnmounted, ref, watch } from "vue";
 import { socket } from "../socket/socket";
 import Conference from "../components/UI/Conference.vue";
 import { useLocalMedia } from "../stores/local-media";
+import { useUser } from "../stores/user-info";
+import Video from "../components/UI/Video.vue";
 //// variables
 const store = useLocalMedia();
-const my_video_ref = ref(null);
 const remoteMediaStreams = ref([]);
 const peerConnections = new Map();
 const pendingCandidates = new Map();
-
+const userStore = useUser();
 /// functions
 
 const createPeerConnection = (userId) => {
@@ -85,33 +78,18 @@ const createPeerConnection = (userId) => {
     }
   };
   pc.addEventListener("track", (e) => {
+    const track = e.track;
     let currentUser = remoteMediaStreams.value.find((m) => m.id === userId);
     if (!currentUser) {
       currentUser = {
         id: userId,
         mediaStream: new MediaStream(),
-        isVideoMuted: track.kind === "video" ? track.muted : false,
-        isAudioMuted: track.kind === "audio" ? track.muted : false,
+        microEnabled: true,
+        cameraEnabled: true,
       };
       remoteMediaStreams.value.push(currentUser);
     }
     currentUser.mediaStream.addTrack(track);
-    track.onmute = () => {
-      console.log(`${userId} is mute track`);
-      const user = remoteMediaStreams.value.find((u) => u.id === userId);
-      if (user) {
-        if (track.kind === "video") user.isVideoMuted = true;
-        if (track.kind === "audio") user.isAudioMuted = true;
-      }
-    };
-    track.onunmute = () => {
-      console.log(`${userId} is unmute track`);
-      const user = remoteMediaStreams.value.find((u) => u.id === userId);
-      if (user) {
-        if (track.kind === "video") user.isVideoMuted = false;
-        if (track.kind === "audio") user.isAudioMuted = false;
-      }
-    };
   });
   peerConnections.set(userId, pc);
   pendingCandidates.set(userId, []);
@@ -131,6 +109,7 @@ watch(
 /// Socket handlers
 socket.on("user_joined", async (user) => {
   const userId = user.user.id;
+  console.log(user.user);
   try {
     const pc = createPeerConnection(userId);
 
@@ -152,6 +131,7 @@ socket.on("user_joined", async (user) => {
 });
 
 socket.on("getOffer", async (sdp) => {
+  console.log(sdp.sender);
   if (!sdp.sdp || !sdp.sender) {
     return;
   }
@@ -238,6 +218,28 @@ socket.on("user_left", (data) => {
   }
 });
 
+socket.on("audio_state_changed", (data) => {
+  console.log(data);
+  if (!data) return;
+  const currentUser = remoteMediaStreams.value.find(
+    (user) => user.id === data.userId
+  );
+  if (!currentUser) {
+    return;
+  }
+  currentUser.microEnabled = data.audioEnabled;
+});
+socket.on("video_state_changed", (data) => {
+  console.log(data);
+  if (!data) return;
+  const currentUser = remoteMediaStreams.value.find(
+    (user) => user.id === data.userId
+  );
+  if (!currentUser) {
+    return;
+  }
+  currentUser.cameraEnabled = data.videoEnabled;
+});
 onUnmounted(() => {
   peerConnections.forEach((pc) => pc.close());
   peerConnections.clear();
@@ -270,7 +272,7 @@ onUnmounted(() => {
   background: #2d2d2d;
 }
 
-.video-container {
+.conf-wrapper {
   position: relative;
   width: 100%;
   height: 100%;
@@ -279,24 +281,6 @@ onUnmounted(() => {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  background-color: #000;
-}
-
-.video-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
-  padding: 12px 16px;
-  pointer-events: none;
 }
 
 .participant-name {
@@ -348,7 +332,7 @@ onUnmounted(() => {
     border-radius: 8px;
   }
 
-  .video-container {
+  .conf-wrapper {
     min-height: 180px;
     border-radius: 6px;
   }
@@ -375,7 +359,7 @@ onUnmounted(() => {
     padding: 8px;
   }
 
-  .video-container {
+  .conf-wrapper {
     min-height: 150px;
   }
 
@@ -388,9 +372,22 @@ onUnmounted(() => {
 }
 
 /* Ландшафтная ориентация на мобильных */
+
 @media (max-width: 768px) and (orientation: landscape) {
   .conference-wrapper {
     max-height: calc(100vh - 100px);
   }
+}
+</style>
+
+<style scoped>
+.conf-wrapper :deep(.video-wrapper) {
+  max-width: 100%;
+
+  border-radius: 8px;
+}
+
+.conf-wrapper :deep(.video-container) {
+  align-items: normal;
 }
 </style>

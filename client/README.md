@@ -64,6 +64,27 @@ javascriptsocket.on('error', (data) => {
 console.log(data.message); // 'Room ID is required'
 });
 
-```
+socket.emit('toggle_audio', { audioEnabled: false });
+// Включить микрофон
+socket.emit('toggle_audio', { audioEnabled: true });
 
-```
+socket.on('audio_state_changed', (data) => {
+console.log(`Пользователь ${data.userName} ${data.audioEnabled ? 'включил' : 'отключил'} микрофон`);
+// Обновите UI соответственно
+});
+
+socket.emit('get_audio_state', { userId: 'target_user_id' });
+socket.on('audio_state_response', (data) => {
+console.log(`Состояние микрофона пользователя: ${data.audioEnabled}`);
+});
+
+GET /users/{user_id}/audio
+
+socket.emit('toggle_video', { videoEnabled: false });
+
+// Включить камеру
+socket.emit('toggle_video', { videoEnabled: true });
+
+socket.on('video_state_changed', (data) => {
+console.log(`Пользователь ${data.userName} ${data.videoEnabled ? 'включил' : 'отключил'} камеру`);
+});

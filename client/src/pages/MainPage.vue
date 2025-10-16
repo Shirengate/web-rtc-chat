@@ -1,17 +1,15 @@
 <template>
   <div class="wrapper">
     <div class="join-room__wrapper">
-      <div class="video-container">
+      <div class="check-wrapper">
         <span>Проверьте аудио и видео</span>
-        <video
-          class="video"
-          autoplay
-          playsinline
-          :srcObject="store.localMedia"
-          ref="my_video_ref"
-          muted
-          id="my-video"
-        ></video>
+        <Video
+          :srcObject="mediaStore.localMedia"
+          :userName="name"
+          :me="true"
+          :cameraEnabled="mediaStore.isVideoEnabled && mediaStore.isVideoActive"
+          :microEnabled="mediaStore.isAudioEnabled && mediaStore.isAudioActive"
+        />
       </div>
 
       <div class="room-controls">
@@ -71,14 +69,17 @@ const { setAudioMedia, setVideoMedia } = useLocalMedia();
 import { socket } from "../socket/socket";
 import randomName from "@scaleway/random-name";
 import axios from "axios";
-const store = useLocalMedia();
-const my_video_ref = ref(null);
+import { useUser } from "../stores/user-info";
+import Video from "../components/UI/Video.vue";
+
+const userStore = useUser();
+const mediaStore = useLocalMedia();
 const disabled = ref(false);
 const router = useRouter();
-// Данные формы
 const newRoomName = ref("");
 const selectedRoom = ref(null);
 const rooms = ref([]);
+const name = randomName();
 const callFn = async () => {
   let roomName;
   if (newRoomName.value) {
@@ -89,14 +90,15 @@ const callFn = async () => {
     alert("Введите название комнаты или выберите существующую");
     return null;
   }
-  if (!store.localMedia) {
+  if (!mediaStore.localMedia) {
     alert("Включите камеру и аудио");
     return null;
   }
   socket.emit("join", {
     room: roomName,
-    name: randomName(),
+    name,
   });
+  userStore.setUserInfo(name, socket.id);
   router.push(`/room/${roomName}`);
   disabled.value = true;
 };
@@ -127,6 +129,7 @@ async function getRooms() {
     return e;
   }
 }
+
 onMounted(async () => {
   await getRooms();
   try {
@@ -142,7 +145,7 @@ onMounted(async () => {
         setVideoMedia(track);
       }
     });
-    console.log(store.localMedia);
+    console.log(mediaStore.localMedia);
   } catch (error) {
     return alert("Не удалось получить доступ к камере/микрофону");
   }
@@ -169,11 +172,12 @@ onMounted(async () => {
   margin: 0 auto;
   flex: 1;
 }
-.video-container {
+.check-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  flex: 1 0;
   span {
     color: white;
     font-size: 18px;
@@ -295,7 +299,9 @@ onMounted(async () => {
     flex-direction: column;
     gap: 30px;
   }
-
+  .check-wrapper {
+    width: 100%;
+  }
   .video {
     max-width: 100%;
   }

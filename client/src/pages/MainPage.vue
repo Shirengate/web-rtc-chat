@@ -71,7 +71,7 @@ import randomName from "@scaleway/random-name";
 import axios from "axios";
 import { useUser } from "../stores/user-info";
 import Video from "../components/UI/Video.vue";
-import { host } from "@assets/config";
+import { host } from "../assets/config";
 const userStore = useUser();
 const mediaStore = useLocalMedia();
 const disabled = ref(false);
@@ -116,7 +116,7 @@ watch(newRoomName, (newVal) => {
 
 async function getRooms() {
   try {
-    const response = await axios.get(host);
+    const response = await axios.get(`${host}/rooms`);
     if (Object.keys(response.data.rooms).length > 0) {
       for (const roomId in response.data.rooms) {
         rooms.value.push({

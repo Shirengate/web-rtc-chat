@@ -116,7 +116,7 @@ watch(newRoomName, (newVal) => {
 
 async function getRooms() {
   try {
-    const response = await axios.get(`${host}/rooms`);
+    const response = await axios.get(`${host}rooms`);
     if (Object.keys(response.data.rooms).length > 0) {
       for (const roomId in response.data.rooms) {
         rooms.value.push({

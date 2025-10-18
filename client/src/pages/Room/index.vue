@@ -25,20 +25,24 @@ import { useLocalMedia } from "@/stores/local-media";
 import { useUser } from "@/stores/user-info";
 import Video from "@/components/UI/Video.vue";
 import { createWebRtcManager } from "@/utils/web-rtc-manager";
-
+import VideoList from "./UI/VideoList.vue";
 //// variables
 const store = useLocalMedia();
 const remoteMediaStreams = ref([]);
 const userStore = useUser();
 
-const handleStreamAdded = (userId, stream) => {
-  remoteMediaStreams.value.push({
-    id: userId,
-    mediaStream: new MediaStream(),
-    microEnabled: true,
-    cameraEnabled: true,
-  });
-  remoteMediaStreams.value.push(currentUser);
+const handleStreamAdded = (userId, track) => {
+  let currentUser = remoteMediaStreams.value.find((m) => m.id === userId);
+  if (!currentUser) {
+    currentUser = {
+      id: userId,
+      mediaStream: new MediaStream(),
+      microEnabled: true,
+      cameraEnabled: true,
+    };
+    remoteMediaStreams.value.push(currentUser);
+  }
+  currentUser.mediaStream.addTrack(track);
 };
 
 const handleStreamRemoved = (userId) => {
@@ -54,23 +58,19 @@ const {
   createOffer,
   getCandidate,
   getAnswer,
-} = createWebRtcManager();
+} = createWebRtcManager(handleStreamAdded);
 
 /// Socket handlers
 socket.on("user_joined", async (user) => {
   const userId = user.user.id;
   try {
-    const pc = createPeerConnection(
-      userId,
-      handleStreamAdded,
-      handleStreamRemoved
-    );
+    const pc = createPeerConnection(userId);
 
     store.localMedia.getTracks().forEach((track) => {
       pc.addTrack(track, store.localMedia);
     });
 
-    await createOffer(pc);
+    createOffer(pc, userId);
   } catch (error) {
     return;
   }
@@ -82,16 +82,12 @@ socket.on("getOffer", async (sdp) => {
   }
   const userId = sdp.sender;
   try {
-    const pc = createPeerConnection(
-      userId,
-      handleStreamAdded,
-      handleStreamRemoved
-    );
+    const pc = createPeerConnection(userId);
 
     store.localMedia.getTracks().forEach((track) => {
       pc.addTrack(track, store.localMedia);
     });
-    await createAnswer(sdp, pc);
+    createAnswer(sdp, pc);
   } catch (error) {
     return;
   }
@@ -101,7 +97,7 @@ socket.on("getAnswer", async (sdp) => {
   if (!sdp.sdp || !sdp.sender) {
     return;
   }
-  await getAnswer(sdp);
+  getAnswer(sdp);
 });
 
 socket.on("getCandidate", async ({ candidate, sender }) => {
@@ -110,7 +106,7 @@ socket.on("getCandidate", async ({ candidate, sender }) => {
     return;
   }
 
-  await getCandidate(candidate, sender);
+  getCandidate(candidate, sender);
 });
 
 socket.on("user_left", (data) => {
@@ -180,6 +176,17 @@ onUnmounted(() => {
   background: #2d2d2d;
 }
 
+.conf-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 .participant-name {
   color: #fff;
   font-size: 14px;
@@ -219,6 +226,7 @@ onUnmounted(() => {
   box-shadow: none;
 }
 
+/* Мобильная версия */
 @media (max-width: 768px) {
   .wrapper {
     padding: 10px;
@@ -226,6 +234,11 @@ onUnmounted(() => {
 
   .conference-wrapper {
     border-radius: 8px;
+  }
+
+  .conf-wrapper {
+    min-height: 180px;
+    border-radius: 6px;
   }
 
   .video-overlay {
@@ -250,6 +263,10 @@ onUnmounted(() => {
     padding: 8px;
   }
 
+  .conf-wrapper {
+    min-height: 150px;
+  }
+
   .join-room__btn {
     bottom: 15px;
     padding: 10px 20px;
@@ -258,10 +275,25 @@ onUnmounted(() => {
   }
 }
 
+/* Ландшафтная ориентация на мобильных */
+
 @media (max-width: 768px) and (orientation: landscape) {
   .conference-wrapper {
     max-height: calc(100vh - 100px);
   }
 }
 </style>
+
+<style scoped>
+.conf-wrapper :deep(.video-wrapper) {
+  max-width: 100%;
+
+  border-radius: 8px;
+}
+
+.conf-wrapper :deep(.video-container) {
+  align-items: normal;
+}
+</style>
+
 

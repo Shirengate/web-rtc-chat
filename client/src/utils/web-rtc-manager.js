@@ -1,6 +1,6 @@
-import { peersConfig } from "@assets/peers.js";
+import { peersConfig } from "@/assets/config.js";
 import { socket } from "@/socket/socket";
-export const createWebRtcManager = (onStreamAdded) => {
+export const createWebRtcManager = (handleStreamAdded) => {
   const peerConnections = new Map();
   const pendingCandidates = new Map();
   const createPeerConnection = (userId) => {
@@ -15,9 +15,8 @@ export const createWebRtcManager = (onStreamAdded) => {
       }
     };
     pc.addEventListener("track", (e) => {
-      if (e.streams && e.streams[0]) {
-        onStreamAdded(userId, e.streams[0]);
-      }
+      const track = e.track;
+      handleStreamAdded(userId, track);
     });
     peerConnections.set(userId, pc);
     pendingCandidates.set(userId, []);
@@ -25,7 +24,7 @@ export const createWebRtcManager = (onStreamAdded) => {
     return pc;
   };
 
-  const createOffer = async (peerConnection) => {
+  const createOffer = async (peerConnection, userId) => {
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
 

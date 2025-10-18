@@ -5,8 +5,6 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
-
 const props = defineProps({
   participantCount: {
     type: Number,

@@ -32,7 +32,7 @@
 <script setup>
 import { onUnmounted, ref, watch } from "vue";
 import { socket } from "../socket/socket";
-import Conference from "../components/UI/Conference.vue";
+import Conference from "./Room/UI/Conference.vue";
 import { useLocalMedia } from "../stores/local-media";
 import { useUser } from "../stores/user-info";
 import Video from "../components/UI/Video.vue";

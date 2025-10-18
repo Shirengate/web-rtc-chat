@@ -41,7 +41,6 @@ export const useLocalMedia = defineStore("localMedia", () => {
 
   const toggleAudio = async () => {
     const audioTrack = localMedia.value?.getAudioTracks()[0];
-    console.log(audioTrack);
     if (audioTrack) {
       audioTrack.enabled = !audioTrack.enabled;
       isAudioActive.value = audioTrack.enabled;

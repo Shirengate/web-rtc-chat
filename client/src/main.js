@@ -13,7 +13,8 @@ import Aura from "@primeuix/themes/aura";
 import { definePreset } from "@primeuix/themes";
 import { createPinia } from "pinia";
 import MainPage from "./pages/MainPage.vue";
-import Room from "./pages/Room.vue";
+import Room from "@pages/Room.vue";
+
 import { createRouter, createWebHistory } from "vue-router";
 const pinia = createPinia();
 const routes = [

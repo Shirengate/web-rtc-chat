@@ -1,10 +1,10 @@
-import { config } from "@assets/peers.js";
+import { peersConfig } from "@assets/peers.js";
 import { socket } from "@/socket/socket";
 export const createWebRtcManager = (onStreamAdded) => {
   const peerConnections = new Map();
   const pendingCandidates = new Map();
   const createPeerConnection = (userId) => {
-    const pc = new RTCPeerConnection(config);
+    const pc = new RTCPeerConnection(peersConfig);
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {

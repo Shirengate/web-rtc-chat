@@ -1,4 +1,4 @@
-export const config = {
+export const peersConfig = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
@@ -21,3 +21,7 @@ export const config = {
   ],
   iceCandidatePoolSize: 10,
 };
+
+export const host = import.meta.env.DEV
+  ? import.meta.env.VITE_LOCALHOST
+  : import.meta.env.VITE_API_URL;

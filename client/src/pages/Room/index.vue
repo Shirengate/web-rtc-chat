@@ -18,7 +18,7 @@
 </template>
 
 <script setup>
-import { onUnmounted, ref } from "vue";
+import { onUnmounted, ref, inject, onMounted } from "vue";
 import { socket } from "@/socket/socket";
 import Conference from "./UI/Conference.vue";
 import { useLocalMedia } from "@/stores/local-media";
@@ -30,6 +30,7 @@ import VideoList from "./UI/VideoList.vue";
 const store = useLocalMedia();
 const remoteMediaStreams = ref([]);
 const userStore = useUser();
+const msg = inject("single");
 
 const handleStreamAdded = (userId, track) => {
   let currentUser = remoteMediaStreams.value.find((m) => m.id === userId);
@@ -144,6 +145,8 @@ socket.on("video_state_changed", (data) => {
   }
   currentUser.cameraEnabled = data.videoEnabled;
 });
+
+onMounted(() => {});
 onUnmounted(() => {
   peerConnections.forEach((pc) => pc.close());
   peerConnections.clear();
@@ -187,46 +190,6 @@ onUnmounted(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-.participant-name {
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.join-room__btn {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  padding: 14px 32px;
-  font-size: 16px;
-  font-weight: 600;
-  min-width: 150px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
-}
-
-.join-room__btn:hover:not(:disabled) {
-  background: #0056b3;
-  transform: translateX(-50%) translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 123, 255, 0.5);
-}
-
-.join-room__btn:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
-  opacity: 0.6;
-  box-shadow: none;
-}
-
-/* Мобильная версия */
 @media (max-width: 768px) {
   .wrapper {
     padding: 10px;
@@ -240,21 +203,6 @@ onUnmounted(() => {
     min-height: 180px;
     border-radius: 6px;
   }
-
-  .video-overlay {
-    padding: 8px 12px;
-  }
-
-  .participant-name {
-    font-size: 13px;
-  }
-
-  .join-room__btn {
-    bottom: 20px;
-    padding: 12px 24px;
-    font-size: 15px;
-    min-width: 130px;
-  }
 }
 
 /* Маленькие экраны */
@@ -265,13 +213,6 @@ onUnmounted(() => {
 
   .conf-wrapper {
     min-height: 150px;
-  }
-
-  .join-room__btn {
-    bottom: 15px;
-    padding: 10px 20px;
-    font-size: 14px;
-    min-width: 110px;
   }
 }
 
@@ -295,5 +236,3 @@ onUnmounted(() => {
   align-items: normal;
 }
 </style>
-
-

@@ -1,23 +1,16 @@
 <template>
-  <div>
-    <div
-      v-for="media in remoteMediaStreams"
-      :key="media.id"
-      class="conf-wrapper"
-    >
-      <Video
-        :me="false"
-        :srcObject="media.mediaStream"
-        :microEnabled="media.microEnabled"
-        :cameraEnabled="media.cameraEnabled"
-        :userName="'name 1'"
-      />
-    </div>
+  <div v-for="media in remoteMediaStreams" :key="media.id" class="conf-wrapper">
+    <Video
+      :me="false"
+      :srcObject="media.mediaStream"
+      :microEnabled="media.microEnabled"
+      :cameraEnabled="media.cameraEnabled"
+      :userName="'name 1'"
+    />
   </div>
 </template>
 
 <script setup>
-import { onMounted } from "vue";
 import Video from "@/components/UI/Video.vue";
 const props = defineProps({
   remoteMediaStreams: Array,

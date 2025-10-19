@@ -25,6 +25,7 @@
 </template>
 
 <script setup>
+import { inject } from "vue";
 defineProps({
   me: Boolean,
   srcObject: MediaStream,
@@ -38,18 +39,15 @@ defineProps({
 
 <style lang="scss" scoped>
 .video-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
   width: 100%;
+  height: 100%;
+  min-height: 0; /* Важно для корректной работы в grid */
 }
 
 .video-wrapper {
   position: relative;
   width: 100%;
-  max-width: 600px;
-  aspect-ratio: 16/9;
+  height: 100%;
   border-radius: 20px;
   overflow: hidden;
   background-color: #2c2c2e;
@@ -60,7 +58,6 @@ defineProps({
 .video-off {
   width: 100%;
   height: 100%;
-  min-height: 200px;
   object-fit: cover;
 }
 
@@ -113,15 +110,10 @@ defineProps({
   }
 }
 
-@media (max-width: 1024px) {
-  .video-wrapper {
-    max-width: 100%;
-  }
-}
-
 @media (max-width: 768px) {
   .video-wrapper {
     border-radius: 15px;
+    min-height: 200px;
   }
   .avatar {
     width: 80px;

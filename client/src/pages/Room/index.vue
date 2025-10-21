@@ -1,18 +1,21 @@
 <template>
-  <div class="wrapper">
-    <div class="conference-wrapper">
-      <conference :participantCount="remoteMediaStreams.length + 1">
-        <div class="conf-wrapper">
-          <Video
-            :me="true"
-            :name="userStore.info.name"
-            :cameraEnabled="store.isVideoActive"
-            :microEnabled="store.isAudioActive"
-            :srcObject="store.localMedia"
-          />
-        </div>
-        <video-list :remoteMediaStreams="remoteMediaStreams" />
-      </conference>
+  <div>
+    <ReconnectRoom v-if="msg === 'close-tab' || !continueToRoom" />
+    <div v-else class="wrapper">
+      <div class="conference-wrapper">
+        <conference :participantCount="remoteMediaStreams.length + 1">
+          <div class="conf-wrapper">
+            <Video
+              :me="true"
+              :name="userStore.info.name"
+              :cameraEnabled="store.isVideoActive"
+              :microEnabled="store.isAudioActive"
+              :srcObject="store.localMedia"
+            />
+          </div>
+          <video-list :remoteMediaStreams="remoteMediaStreams" />
+        </conference>
+      </div>
     </div>
   </div>
 </template>
@@ -28,13 +31,16 @@ import { createWebRtcManager } from "@/utils/web-rtc-manager";
 import VideoList from "./UI/VideoList.vue";
 import { useStreams } from "../../composables/use-streams";
 import { useRoute } from "vue-router";
+import ReconnectRoom from "./UI/ReconnectRoom.vue";
 //// variables
 const store = useLocalMedia();
 const remoteMediaStreams = ref([]);
 const userStore = useUser();
 const route = useRoute();
 const { initMedia } = useStreams();
-const msg = inject("single");
+
+const continueToRoom = ref(false);
+const openedAfter = inject("openedAfter");
 
 const handleStreamAdded = (userId, track) => {
   let currentUser = remoteMediaStreams.value.find((m) => m.id === userId);
@@ -154,10 +160,18 @@ onMounted(async () => {
   if (!store.localMedia) {
     await initMedia();
   }
-  socket.emit("join", {
-    room: route.params.id,
-    name: userStore.name,
-  });
+
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  if (openedAfter.value === "close-tab") {
+    return;
+  } else {
+    continueToRoom.value = true;
+    socket.emit("join", {
+      room: route.params.id,
+      name: userStore.name,
+    });
+  }
 });
 onUnmounted(() => {
   peerConnections.forEach((pc) => pc.close());

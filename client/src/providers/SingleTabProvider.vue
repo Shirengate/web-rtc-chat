@@ -21,34 +21,38 @@
 import { useBroadcastChannel } from "@vueuse/core";
 import { useRoute, useRouter } from "vue-router";
 import { shallowRef, watch, watchEffect, ref, provide } from "vue";
-
 import Dialog from "primevue/dialog";
-const route = useRoute();
-const msg = shallowRef("");
 
+const route = useRoute();
+const openedBefore = shallowRef("");
+const openedAfter = shallowRef("");
 const visible = ref(false);
-const { isSupported, data, post, error } = useBroadcastChannel({
+
+const { data, post } = useBroadcastChannel({
   name: "single-tab",
 });
+
+provide("openedBefore", openedBefore);
+provide("openedAfter", openedAfter);
 
 watch(
   () => route.fullPath,
   (newPath) => {
     if (newPath.includes("room")) {
-      msg.value = "single-tab";
-      post(msg.value);
+      openedBefore.value = "single-tab";
+      post(openedBefore.value);
     }
   },
   { immediate: true }
 );
-
 watch(data, (newData) => {
   if (newData && newData === "single-tab") {
     visible.value = true;
-    provide("single", "close-tab");
+    post("close-tab");
+  }
+  if (newData === "close-tab") {
+    openedAfter.value = "close-tab";
   }
 });
 </script>
 
-<style lang="scss" scoped>
-</style>

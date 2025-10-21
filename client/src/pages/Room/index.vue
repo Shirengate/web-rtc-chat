@@ -26,10 +26,14 @@ import { useUser } from "@/stores/user-info";
 import Video from "@/components/UI/Video.vue";
 import { createWebRtcManager } from "@/utils/web-rtc-manager";
 import VideoList from "./UI/VideoList.vue";
+import { useStreams } from "../../composables/use-streams";
+import { useRoute } from "vue-router";
 //// variables
 const store = useLocalMedia();
 const remoteMediaStreams = ref([]);
 const userStore = useUser();
+const route = useRoute();
+const { initMedia } = useStreams();
 const msg = inject("single");
 
 const handleStreamAdded = (userId, track) => {
@@ -146,7 +150,15 @@ socket.on("video_state_changed", (data) => {
   currentUser.cameraEnabled = data.videoEnabled;
 });
 
-onMounted(() => {});
+onMounted(async () => {
+  if (!store.localMedia) {
+    await initMedia();
+  }
+  socket.emit("join", {
+    room: route.params.id,
+    name: userStore.name,
+  });
+});
 onUnmounted(() => {
   peerConnections.forEach((pc) => pc.close());
   peerConnections.clear();

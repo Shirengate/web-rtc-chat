@@ -96,10 +96,7 @@ const callFn = async () => {
     alert("Включите камеру и аудио");
     return null;
   }
-  socket.emit("join", {
-    room: roomName,
-    name,
-  });
+
   userStore.setUserInfo(name, socket.id);
   router.push(`/room/${roomName}`);
   disabled.value = true;

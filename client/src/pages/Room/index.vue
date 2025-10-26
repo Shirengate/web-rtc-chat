@@ -1,6 +1,6 @@
 <template>
   <div>
-    <ReconnectRoom v-if="openedAfter === 'close-tab' || !continueToRoom" />
+    <ReconnectRoom :continueToRoom="continueToRoom" :allowedData="store.localMedia ? true : false" v-if="openedAfter === 'close-tab' || !continueToRoom " />
     <div v-else class="wrapper">
       <div class="conference-wrapper">
         <conference :participantCount="remoteMediaStreams.length + 1">

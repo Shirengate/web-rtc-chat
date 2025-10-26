@@ -8,6 +8,7 @@ export const useLocalMedia = defineStore("localMedia", () => {
   const localVideo = ref(null);
   const localAudio = ref(null);
 
+
   const isVideoActive = ref(true);
   const isAudioActive = ref(true);
 

@@ -20,7 +20,7 @@
 <script setup>
 import { useBroadcastChannel } from "@vueuse/core";
 import { useRoute, useRouter } from "vue-router";
-import { shallowRef, watch, watchEffect, ref, provide } from "vue";
+import { shallowRef, watch,  ref, provide } from "vue";
 import Dialog from "primevue/dialog";
 
 const route = useRoute();

@@ -27,8 +27,10 @@ export const useStreams = () => {
           localMediaStore.setVideoMedia(track);
         }
       });
+      localMediaStore.mediaAllowedStatus = true
       return mediaStream;
     } catch (err) {
+      localMediaStore.mediaAllowedStatus = 'cancel'
       alert(
         "Could not access camera and microphone. Please check permissions."
       );

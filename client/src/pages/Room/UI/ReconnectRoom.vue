@@ -29,16 +29,26 @@
 </template>
 
 <script setup>
+
 import { ref, onMounted } from "vue";
 import Dialog from "primevue/dialog";
 import ProgressSpinner from "primevue/progressspinner";
 
+const props = defineProps({
+  allowedData:Boolean,
+  continueToRoom:Boolean
+})
+
+
 const visible = ref(false);
 
 onMounted(() => {
-  setTimeout(() => {
+  if(props.allowedData && !props.continueToRoom){
+      setTimeout(() => {
     visible.value = true;
   }, 1500);
+  }
+
 });
 </script>
 

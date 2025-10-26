@@ -18,9 +18,10 @@ const props = defineProps({
   display: grid;
   gap: 8px;
   width: 100%;
-  height: 100%;
+  height: 100vh;
   padding: 8px;
   box-sizing: border-box;
+
 }
 
 /* 1 участник */

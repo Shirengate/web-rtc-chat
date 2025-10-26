@@ -30,7 +30,7 @@
             <span class="divider-text">или</span>
           </div>
 
-          <!-- Выбрать существующую комнату -->
+
           <div class="form-group">
             <label for="select-room" class="form-label">Выбрать комнату</label>
             <Select
@@ -44,7 +44,6 @@
             />
           </div>
 
-          <!-- Кнопка присоединиться -->
           <Button
             label="Присоединиться"
             icon="pi pi-video"
@@ -59,27 +58,31 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted,  ref, watch } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
-import { useLocalMedia } from "../stores/local-media";
 import { useRouter } from "vue-router";
-const { setAudioMedia, setVideoMedia } = useLocalMedia();
 import { socket } from "../socket/socket";
 import randomName from "@scaleway/random-name";
 import axios from "axios";
 import { useUser } from "../stores/user-info";
 import Video from "../components/UI/Video.vue";
 import { host } from "../assets/config";
+import { useLocalMedia } from "../stores/local-media";
+import { useStreams } from "../composables/use-streams";
 const userStore = useUser();
 const mediaStore = useLocalMedia();
+const { initMedia } = useStreams();
 const disabled = ref(false);
 const router = useRouter();
 const newRoomName = ref("");
 const selectedRoom = ref(null);
 const rooms = ref([]);
 const name = randomName();
+
+
+
 const callFn = async () => {
   let roomName;
   if (newRoomName.value) {
@@ -94,10 +97,6 @@ const callFn = async () => {
     alert("Включите камеру и аудио");
     return null;
   }
-  socket.emit("join", {
-    room: roomName,
-    name,
-  });
   userStore.setUserInfo(name, socket.id);
   router.push(`/room/${roomName}`);
   disabled.value = true;
@@ -131,24 +130,9 @@ async function getRooms() {
 }
 
 onMounted(async () => {
+  await initMedia();
   await getRooms();
-  try {
-    const mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: true,
-    });
-    mediaStream.getTracks().forEach((track) => {
-      if (track.kind === "audio") {
-        setAudioMedia(track);
-      }
-      if (track.kind === "video") {
-        setVideoMedia(track);
-      }
-    });
-    console.log(mediaStore.localMedia);
-  } catch (error) {
-    return alert("Не удалось получить доступ к камере/микрофону");
-  }
+
 });
 </script>
 

@@ -1,44 +1,62 @@
 <template>
-  <div class="wrapper">
-    <div class="conference-wrapper">
-      <conference :participantCount="remoteMediaStreams.length + 1">
-        <div class="conf-wrapper">
-          <Video
-            :me="true"
-            :name="userStore.info.name"
-            :cameraEnabled="store.isVideoActive"
-            :microEnabled="store.isAudioActive"
-            :srcObject="store.localMedia"
-          />
-        </div>
-        <video-list :remoteMediaStreams="remoteMediaStreams" />
-      </conference>
+  <div>
+    <ReconnectRoom :continueToRoom="continueToRoom" :allowedData="store.localMedia ? true : false" v-if="openedAfter === 'close-tab' || !continueToRoom " />
+    <div v-else class="wrapper">
+      <div class="conference-wrapper">
+        <conference :participantCount="remoteMediaStreams.length + 1">
+          <div class="conf-wrapper">
+            <Video
+              :me="true"
+              :name="userStore.info.name"
+              :cameraEnabled="store.isVideoActive"
+              :microEnabled="store.isAudioActive"
+              :srcObject="store.localMedia"
+            />
+          </div>
+          <video-list :remoteMediaStreams="remoteMediaStreams" />
+        </conference>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onUnmounted, ref } from "vue";
+import { onUnmounted, ref, inject, onMounted } from "vue";
 import { socket } from "@/socket/socket";
 import Conference from "./UI/Conference.vue";
 import { useLocalMedia } from "@/stores/local-media";
 import { useUser } from "@/stores/user-info";
 import Video from "@/components/UI/Video.vue";
 import { createWebRtcManager } from "@/utils/web-rtc-manager";
-
+import VideoList from "./UI/VideoList.vue";
+import { useStreams } from "../../composables/use-streams";
+import { useRoute } from "vue-router";
+import ReconnectRoom from "./UI/ReconnectRoom.vue";
 //// variables
 const store = useLocalMedia();
 const remoteMediaStreams = ref([]);
 const userStore = useUser();
+const route = useRoute();
+const { initMedia } = useStreams();
 
-const handleStreamAdded = (userId, stream) => {
-  remoteMediaStreams.value.push({
-    id: userId,
-    mediaStream: new MediaStream(),
-    microEnabled: true,
-    cameraEnabled: true,
-  });
-  remoteMediaStreams.value.push(currentUser);
+const continueToRoom = ref(false);
+const openedAfter = inject("openedAfter");
+
+
+
+const handleStreamAdded = (userId, track, username) => {
+  let currentUser = remoteMediaStreams.value.find((m) => m.id === userId);
+  if (!currentUser) {
+    currentUser = {
+      id: userId,
+      mediaStream: new MediaStream(),
+      microEnabled: true,
+      cameraEnabled: true,
+      username:username
+    };
+    remoteMediaStreams.value.push(currentUser);
+  }
+  currentUser.mediaStream.addTrack(track);
 };
 
 const handleStreamRemoved = (userId) => {
@@ -54,23 +72,20 @@ const {
   createOffer,
   getCandidate,
   getAnswer,
-} = createWebRtcManager();
+} = createWebRtcManager(handleStreamAdded);
 
 /// Socket handlers
 socket.on("user_joined", async (user) => {
   const userId = user.user.id;
+  const username = user.user.name
   try {
-    const pc = createPeerConnection(
-      userId,
-      handleStreamAdded,
-      handleStreamRemoved
-    );
+    const pc = createPeerConnection({userId, username});
 
     store.localMedia.getTracks().forEach((track) => {
       pc.addTrack(track, store.localMedia);
     });
 
-    await createOffer(pc);
+    createOffer(pc, userId);
   } catch (error) {
     return;
   }
@@ -81,17 +96,14 @@ socket.on("getOffer", async (sdp) => {
     return;
   }
   const userId = sdp.sender;
+  const username = sdp.username
   try {
-    const pc = createPeerConnection(
-      userId,
-      handleStreamAdded,
-      handleStreamRemoved
-    );
+    const pc = createPeerConnection({userId, username});
 
     store.localMedia.getTracks().forEach((track) => {
       pc.addTrack(track, store.localMedia);
     });
-    await createAnswer(sdp, pc);
+    createAnswer(sdp, pc);
   } catch (error) {
     return;
   }
@@ -101,7 +113,7 @@ socket.on("getAnswer", async (sdp) => {
   if (!sdp.sdp || !sdp.sender) {
     return;
   }
-  await getAnswer(sdp);
+  getAnswer(sdp);
 });
 
 socket.on("getCandidate", async ({ candidate, sender }) => {
@@ -110,7 +122,7 @@ socket.on("getCandidate", async ({ candidate, sender }) => {
     return;
   }
 
-  await getCandidate(candidate, sender);
+  getCandidate(candidate, sender);
 });
 
 socket.on("user_left", (data) => {
@@ -148,6 +160,24 @@ socket.on("video_state_changed", (data) => {
   }
   currentUser.cameraEnabled = data.videoEnabled;
 });
+
+onMounted(async () => {
+  if (!store.localMedia) {
+    await initMedia();
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  if (openedAfter.value === "close-tab") {
+    return;
+  } else {
+    continueToRoom.value = true;
+    socket.emit("join", {
+      room: route.params.id,
+      name: userStore.info.name,
+    });
+  }
+});
 onUnmounted(() => {
   peerConnections.forEach((pc) => pc.close());
   peerConnections.clear();
@@ -180,43 +210,15 @@ onUnmounted(() => {
   background: #2d2d2d;
 }
 
-.participant-name {
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.join-room__btn {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  padding: 14px 32px;
-  font-size: 16px;
-  font-weight: 600;
-  min-width: 150px;
-  background: #007bff;
-  color: white;
-  border: none;
+.conf-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  background: #000;
   border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
-}
-
-.join-room__btn:hover:not(:disabled) {
-  background: #0056b3;
-  transform: translateX(-50%) translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 123, 255, 0.5);
-}
-
-.join-room__btn:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
-  opacity: 0.6;
-  box-shadow: none;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 @media (max-width: 768px) {
@@ -228,19 +230,9 @@ onUnmounted(() => {
     border-radius: 8px;
   }
 
-  .video-overlay {
-    padding: 8px 12px;
-  }
-
-  .participant-name {
-    font-size: 13px;
-  }
-
-  .join-room__btn {
-    bottom: 20px;
-    padding: 12px 24px;
-    font-size: 15px;
-    min-width: 130px;
+  .conf-wrapper {
+    min-height: 180px;
+    border-radius: 6px;
   }
 }
 
@@ -250,13 +242,11 @@ onUnmounted(() => {
     padding: 8px;
   }
 
-  .join-room__btn {
-    bottom: 15px;
-    padding: 10px 20px;
-    font-size: 14px;
-    min-width: 110px;
+  .conf-wrapper {
+    min-height: 150px;
   }
 }
+
 
 @media (max-width: 768px) and (orientation: landscape) {
   .conference-wrapper {
@@ -265,3 +255,14 @@ onUnmounted(() => {
 }
 </style>
 
+<style scoped>
+.conf-wrapper :deep(.video-wrapper) {
+  max-width: 100%;
+
+  border-radius: 8px;
+}
+
+.conf-wrapper :deep(.video-container) {
+  align-items: normal;
+}
+</style>

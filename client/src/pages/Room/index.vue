@@ -42,6 +42,8 @@ const { initMedia } = useStreams();
 const continueToRoom = ref(false);
 const openedAfter = inject("openedAfter");
 
+
+
 const handleStreamAdded = (userId, track, username) => {
   let currentUser = remoteMediaStreams.value.find((m) => m.id === userId);
   if (!currentUser) {

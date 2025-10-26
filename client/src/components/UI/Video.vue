@@ -65,6 +65,7 @@ defineProps({
   justify-content: center;
   align-items: center;
   background-color: #48484a;
+  min-height: 250px;
 }
 
 .avatar {

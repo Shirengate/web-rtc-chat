@@ -8,6 +8,8 @@ export const useLocalMedia = defineStore("localMedia", () => {
   const localVideo = ref(null);
   const localAudio = ref(null);
 
+  
+  const allowedDevices = ref([])
 
   const isVideoActive = ref(true);
   const isAudioActive = ref(true);
@@ -109,5 +111,6 @@ export const useLocalMedia = defineStore("localMedia", () => {
     setVideoMedia,
     toggleVideo,
     toggleAudio,
+    allowedDevices  
   };
 });

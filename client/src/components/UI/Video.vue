@@ -25,7 +25,6 @@
 </template>
 
 <script setup>
-import { inject } from "vue";
 defineProps({
   me: Boolean,
   srcObject: MediaStream,
@@ -41,7 +40,7 @@ defineProps({
 .video-container {
   width: 100%;
   height: 100%;
-  min-height: 0; /* Важно для корректной работы в grid */
+  min-height: 0;
 }
 
 .video-wrapper {
@@ -99,10 +98,8 @@ defineProps({
     max-width: 83px;
     overflow-x: scroll;
     white-space: nowrap;
-    &::-webkit-scrollbar {
-      width: 0;
-      height: 0;
-    }
+    scrollbar-width: none;
+
   }
 
   i {

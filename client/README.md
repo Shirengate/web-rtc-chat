@@ -14,6 +14,7 @@ javascriptsocket.emit('join', { room: 'room_123', name: 'Alice' });
 offer - Отправить WebRTC offer
 javascriptsocket.emit('offer', {
 target: 'user_socket_id',
+username:string
 sdp: { type: 'offer', sdp: 'v=0...' }
 });
 answer - Отправить WebRTC answer
@@ -48,6 +49,7 @@ getOffer - Получен WebRTC offer
 javascriptsocket.on('getOffer', (data) => {
 console.log(data.sdp); // { type: 'offer', sdp: '...' }
 console.log(data.sender); // 'sid*отправителя'
+console.log(data.username); // 'username отправителя
 });
 getAnswer - Получен WebRTC answer
 javascriptsocket.on('getAnswer', (data) => {

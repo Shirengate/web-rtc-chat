@@ -1,11 +1,12 @@
 <template>
   <div v-for="media in remoteMediaStreams" :key="media.id" class="conf-wrapper">
     <Video
+    :key="media.id"
       :me="false"
       :srcObject="media.mediaStream"
       :microEnabled="media.microEnabled"
       :cameraEnabled="media.cameraEnabled"
-      :userName="'name 1'"
+      :userName="media.username"
     />
   </div>
 </template>

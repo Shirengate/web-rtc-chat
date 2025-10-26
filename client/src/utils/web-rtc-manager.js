@@ -3,7 +3,7 @@ import { socket } from "@/socket/socket";
 export const createWebRtcManager = (handleStreamAdded) => {
   const peerConnections = new Map();
   const pendingCandidates = new Map();
-  const createPeerConnection = (userId) => {
+  const createPeerConnection = ({userId ,username}) => {
     const pc = new RTCPeerConnection(peersConfig);
 
     pc.onicecandidate = (e) => {
@@ -16,7 +16,7 @@ export const createWebRtcManager = (handleStreamAdded) => {
     };
     pc.addEventListener("track", (e) => {
       const track = e.track;
-      handleStreamAdded(userId, track);
+      handleStreamAdded(userId, track, username);
     });
     peerConnections.set(userId, pc);
     pendingCandidates.set(userId, []);

@@ -30,7 +30,7 @@
             <span class="divider-text">или</span>
           </div>
 
-          <!-- Выбрать существующую комнату -->
+
           <div class="form-group">
             <label for="select-room" class="form-label">Выбрать комнату</label>
             <Select
@@ -44,7 +44,6 @@
             />
           </div>
 
-          <!-- Кнопка присоединиться -->
           <Button
             label="Присоединиться"
             icon="pi pi-video"
@@ -59,12 +58,11 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted,  ref, watch } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import { useRouter } from "vue-router";
-const { setAudioMedia, setVideoMedia } = useLocalMedia();
 import { socket } from "../socket/socket";
 import randomName from "@scaleway/random-name";
 import axios from "axios";
@@ -82,6 +80,9 @@ const newRoomName = ref("");
 const selectedRoom = ref(null);
 const rooms = ref([]);
 const name = randomName();
+
+
+
 const callFn = async () => {
   let roomName;
   if (newRoomName.value) {
@@ -96,7 +97,6 @@ const callFn = async () => {
     alert("Включите камеру и аудио");
     return null;
   }
-
   userStore.setUserInfo(name, socket.id);
   router.push(`/room/${roomName}`);
   disabled.value = true;
@@ -132,6 +132,7 @@ async function getRooms() {
 onMounted(async () => {
   await initMedia();
   await getRooms();
+
 });
 </script>
 

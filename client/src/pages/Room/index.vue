@@ -42,7 +42,7 @@ const { initMedia } = useStreams();
 const continueToRoom = ref(false);
 const openedAfter = inject("openedAfter");
 
-const handleStreamAdded = (userId, track) => {
+const handleStreamAdded = (userId, track, username) => {
   let currentUser = remoteMediaStreams.value.find((m) => m.id === userId);
   if (!currentUser) {
     currentUser = {
@@ -50,6 +50,7 @@ const handleStreamAdded = (userId, track) => {
       mediaStream: new MediaStream(),
       microEnabled: true,
       cameraEnabled: true,
+      username:username
     };
     remoteMediaStreams.value.push(currentUser);
   }
@@ -74,8 +75,9 @@ const {
 /// Socket handlers
 socket.on("user_joined", async (user) => {
   const userId = user.user.id;
+  const username = user.user.name
   try {
-    const pc = createPeerConnection(userId);
+    const pc = createPeerConnection({userId, username});
 
     store.localMedia.getTracks().forEach((track) => {
       pc.addTrack(track, store.localMedia);
@@ -92,8 +94,9 @@ socket.on("getOffer", async (sdp) => {
     return;
   }
   const userId = sdp.sender;
+  const username = sdp.username
   try {
-    const pc = createPeerConnection(userId);
+    const pc = createPeerConnection({userId, username});
 
     store.localMedia.getTracks().forEach((track) => {
       pc.addTrack(track, store.localMedia);
@@ -169,7 +172,7 @@ onMounted(async () => {
     continueToRoom.value = true;
     socket.emit("join", {
       room: route.params.id,
-      name: userStore.name,
+      name: userStore.info.name,
     });
   }
 });
@@ -242,7 +245,6 @@ onUnmounted(() => {
   }
 }
 
-/* Ландшафтная ориентация на мобильных */
 
 @media (max-width: 768px) and (orientation: landscape) {
   .conference-wrapper {

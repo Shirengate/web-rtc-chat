@@ -10,6 +10,7 @@
         </div>
         <Popover ref="op">
           <Select 
+          @change="changeValue"
             v-model="selectedCamera"
             :options="store.allowedDevices" 
             optionLabel="label"
@@ -56,10 +57,30 @@ const currentVideo = computed(() => {
   return store.localVideo.getSettings()
 })
 
+
+const changeValue = async (event) => {
+  try {
+      const mediaStreams = await navigator.mediaDevices.getUserMedia({
+    audio:false,
+    video:{
+      deviceId:{
+        exact:selectedCamera.value
+      }
+    }
+      })
+      const videoTrack = mediaStreams.getVideoTracks()[0]
+      
+      store.setVideoMedia(videoTrack)
+      
+  } catch (error) {
+    console.error('Cannot take this videostreams reason:', error)
+    return
+  }
+  
+}
 onMounted(async () => {
   const devices =  (await navigator.mediaDevices.enumerateDevices()).filter(item => item.kind === 'videoinput')
   store.allowedDevices = devices
-  console.log(devices)
 })  
 </script>
 
@@ -104,7 +125,8 @@ onMounted(async () => {
 .device-item {
   padding: 8px 16px;
   font-size: 14px;
-  color: #374151; 
+  color: #374151;
+  background: white; 
   cursor: pointer;
   
   &:hover {

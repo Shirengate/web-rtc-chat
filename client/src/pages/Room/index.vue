@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { onUnmounted, ref, inject, onMounted } from "vue";
+import { onUnmounted, ref, inject, onMounted, watch } from "vue";
 import { socket } from "@/socket/socket";
 import Conference from "./UI/Conference.vue";
 import { useLocalMedia } from "@/stores/local-media";
@@ -124,6 +124,19 @@ socket.on("getCandidate", async ({ candidate, sender }) => {
 
   getCandidate(candidate, sender);
 });
+
+
+watch(() => store.localVideo , (newVal) => {
+  peerConnections.forEach(connection => {
+    const senderList = connection.getSenders()
+    senderList.forEach(sender => {
+      if(sender.track.kind === 'video'){
+        console.log(newVal)
+        sender.replaceTrack(newVal)
+      }
+    })
+  })
+} )
 
 socket.on("user_left", (data) => {
   const userId = data?.user?.id;

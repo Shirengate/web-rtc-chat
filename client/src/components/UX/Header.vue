@@ -24,6 +24,8 @@
               </div>
             </template>
           </Select>
+          <Button class="refresh-button" @click="getDevices">Обновить данные</Button>
+
         </Popover>
         <Button @click="store.toggleAudio()" :severity="
             store.isAudioActive && store.isAudioEnabled ? 'contrast' : 'danger'
@@ -48,9 +50,13 @@ import { computed, onMounted, ref } from "vue";
 const store = useLocalMedia();
 const op = ref();
 const selectedCamera = ref('');
+const isOpen = ref(false)
+
 
 const toggle = (event) => {
+  
     op.value.toggle(event);
+    isOpen.value = !isOpen
 }
 
 const currentVideo = computed(() => {
@@ -58,7 +64,7 @@ const currentVideo = computed(() => {
 })
 
 
-const changeValue = async (event) => {
+const changeValue = async () => {
   try {
       const mediaStreams = await navigator.mediaDevices.getUserMedia({
     audio:false,
@@ -78,9 +84,15 @@ const changeValue = async (event) => {
   }
   
 }
-onMounted(async () => {
-  const devices =  (await navigator.mediaDevices.enumerateDevices()).filter(item => item.kind === 'videoinput')
+
+
+async function getDevices() {
+    const devices =  (await navigator.mediaDevices.enumerateDevices()).filter(item => item.kind === 'videoinput')
   store.allowedDevices = devices
+}
+onMounted(async () => {
+  await getDevices()
+
 })  
 </script>
 
@@ -137,5 +149,8 @@ onMounted(async () => {
     background-color: #eff6ff;
     color: #2563eb;
   }
+}
+.refresh-button{
+  margin-left: 5px;
 }
 </style>

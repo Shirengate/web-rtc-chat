@@ -1,6 +1,7 @@
 # WebRTC Video Call Application
 
 Vue.js приложение для видеозвонков с использованием WebRTC технологии.
+**[🌐 Демо на Netlify](https://incredible-taiyaki-bf9dc9.netlify.app)**
 
 ## 🚀 Технологии
 
